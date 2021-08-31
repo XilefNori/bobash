@@ -1,0 +1,115 @@
+# dos2unix: Binary symbol 0x1B found at line 2
+# dos2unix: Skipping binary file stdin
+
+php-exec() { echo "$@" | xargs -Icode  php -r 'code'; }
+
+php-filter() {
+    declare cmd help
+
+    cmd="$@"
+    [[ -z "$cmd" ]] && { cmd="${LC}<YOUR INPUT HERE>${NC}"; help=1; }
+
+
+    code=$(cat<<EOF
+while(FALSE !== (\$i = fgets(STDIN))) {
+    \$i=trim(\$i);
+    echo $cmd;
+}
+EOF
+);
+
+    if [[ $help ]]; then
+        echo -e "<?php\n$code\n?>" >&2
+    else
+        php -r "$code"
+        return $?
+    fi
+}
+
+php-log() {
+    declare OPTIND=1
+
+    while getopts c opt
+    do
+        case "$opt" in
+            c) : > $PHP_LOG ;;
+        esac
+    done
+
+    less-log $PHP_LOG
+}
+
+[[ -z $PHP_LOG ]] && PHP_LOG=/var/log/php.log
+
+xdebug-remote-enabled() {
+    php -r 'exit(!intval(ini_get("xdebug.remote_enable") == 1));'
+}
+
+php-check() { xargs -I% php -l %; }
+
+php-check-files() {
+	if [[ $# > 0 ]]; then
+		for i in "$@"; do
+			echo "$i"
+			php -l "$i"
+		done
+	fi
+}
+
+PHP_INI_NO_XDEBUG=''
+xdebug-make-php-ini-no-xdebug()
+{
+    declare force
+
+    # -- Arguments --
+    declare flags="f" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            f) force=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    [[ -z $PHP_INI_NO_XDEBUG ]] && PHP_INI_NO_XDEBUG="$(mktemp -t php.XXXX).ini"
+
+    if [[ ! -s "$PHP_INI_NO_XDEBUG" || $force ]]; then
+        # Using awk to ensure that files ending without newlines do not lead to configuration error
+        php -i | grep "\.ini" | grep -o -e '\(/[a-z0-9._-]\+\)\+\.ini' | grep -v xdebug | xargs awk 'FNR==1{print ""}1' > "$PHP_INI_NO_XDEBUG"
+    fi
+
+    echo "$PHP_INI_NO_XDEBUG"
+}
+
+php-ini() {
+    declare da_file="$(php --ini | grep 'Loaded Configuration File:' | sed 's/Loaded Configuration File://' | awk '{$1=$1};1')"
+
+    [[ $UNAME == Cygwin ]] && {
+        cygpath -m "$da_file";
+    } || {
+        echo "$da_file"
+    }
+}
+
+php-no-xdebug()
+{
+    [[ ! -s "$PHP_INI_NO_XDEBUG" ]] && {
+        declare fa_ini="$(php-ini)"
+        declare fa_ini_no_xdebug="${fa_ini%.*}-no-xdebug.${fa_ini##*.}"
+
+        [[ -s "$fa_ini_no_xdebug" ]] && {
+            PHP_INI_NO_XDEBUG="$fa_ini_no_xdebug"
+        }
+    }
+
+    declare -a php_opts
+
+    [[ -s "$PHP_INI_NO_XDEBUG" ]] && {
+        php_opts+=(-n -c "$PHP_INI_NO_XDEBUG")
+    } || {
+        echo "No xdebug config file [$fa_ini_no_xdebug] found!" >&2
+    }
+
+    XDEBUG_CONFIG= php "${php_opts[@]}" "$@"
+}

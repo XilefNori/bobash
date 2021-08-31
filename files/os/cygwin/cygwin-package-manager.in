@@ -1,0 +1,33 @@
+BIN_CYGWIN_SETUP=c:/inst/cygwin64/setup-x86_64.exe
+
+cyg-setup() {
+    local cmd="`cygpath -u "$BIN_CYGWIN_SETUP"`"
+
+    cygstart "$cmd" --no-shortcuts --no-desktop --no-startmenu "$@"
+}
+
+cyg-install() { cyg-setup --quiet-mode --packages "$@"; }
+
+cyg-bin() { cygcheck -f "`which $1`"; }
+cyg-system() { cygcheck -sr | less; }
+
+cyg-bin-list() {
+	{
+		package=$(cygcheck -f "`which $1`");
+		echo -e "package: $package\n";
+		cygcheck -l ${package%%-*};
+	} | less
+}
+
+cyg-package-list() { cygcheck -c -d "$@"; }
+
+cyg-package-test() { cygcheck -c "$@"; }
+
+cyg-search() { cygcheck -p "$@"; }
+cyg-manager() { cyg-setup -M "$@"; }
+
+cyg-package-list-out() {
+    cyg-package-list | tail -n +3 | grep -v -E '^lib' | grep -v -f "$BOBASH_DIR/etc/cygwin-base.list"
+}
+
+cyg-help-install() { cyg-setup --help; }

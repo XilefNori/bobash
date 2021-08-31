@@ -1,0 +1,6 @@
+# Copy bobash scripts
+COPY scripts/ /bobash/scripts/
+WORKDIR /bobash/
+
+# Run bobash install
+CMD ["bash", "-x", "scripts/install.sh"]

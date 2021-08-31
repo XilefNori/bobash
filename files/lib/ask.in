@@ -1,0 +1,52 @@
+log-date-line() {
+    local date;
+    local date_format="[%T] %F";
+
+    date=$(\date "+$date_format");
+
+    line="\n\n== $date ========================================================\n\n"
+
+    echo -e $line;
+}
+
+less-log() {
+    log-date-line >> "$1"
+    less +GF "$@"
+}
+
+pause() {
+  if [ $# -gt 0 ] && [ $1 -gt 0 ]; then
+  	read -t $1 -n 1 -p "Wait $1 seconds or press any key..."
+  else
+  	read -n 1 -p "Press any key..."
+  fi
+  echo >&2
+}
+
+ask() { simple_ask "$@"; }
+
+simple_ask() {
+    while true
+    do
+        read -p "$* [y/n]: "
+        echo
+        if [ "$REPLY" == "y" ] || [ "$REPLY" == "Y" ];  then return 0; fi
+        if [ "$REPLY" == "n" ]  || [ "$REPLY" == "N" ]; then return 1; fi
+        echo "Пожалуйстся введите 'y/Y' или 'n/N'!"
+    done
+}
+
+annoying_ask() {
+    echo "$@ [Наберите yes для продолжения, или enter для отмены]"
+
+    while true
+    do
+        read
+        if [ "$REPLY" == "yes" ] || [ "$REPLY" == "YES" ]; then
+            return 0;
+        else
+            return 1;
+        fi
+    done
+}
+

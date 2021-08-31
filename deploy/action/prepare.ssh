@@ -1,0 +1,2 @@
+[ ! -d %HOME% ] && mkdir -p %HOME%
+[ -d %HOME% ] && echo 'Dir: [%HOME%] exists' || echo "Can't create dir: [%HOME%]"

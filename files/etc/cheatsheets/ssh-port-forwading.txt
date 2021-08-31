@@ -1,0 +1,31 @@
+
+# $LOCAL_IP: 'localhost' or machine from local network
+# $LOCAL_PORT: open port on local machine
+# $REMOTE_IP: remote localhost or IP from remote network
+# $REMOTE_PORT: open port on remote site
+
+# Forward Tunnel: map port from remote machine/network on local machine
+ssh -L $LOCAL_PORT:$REMOTE_IP:$REMOTE_PORT $USER@$SERVER
+
+# Reverse Tunnel: make local port accessable to remote machine
+ssh -R $REMOTE_PORT:$LOCAL_IP:$LOCAL_PORT $USER@$SERVER
+
+# -- Sample -------------------------------------------------------------------------
+
+command ssh -N \
+	-L 127.0.0.1:8002:127.0.0.1:8012 \ # Local  forawding
+	-R 127.0.0.1:8013:127.0.0.1:8003 \ # Remote forawdin
+box2
+
+# -- Checking ------------------------------------------------------------------------
+
++--------------------+------------------------------------+-------------------------------------+
+| Type               |  Local forwarding                  | Remote forwarding                   |
++--------------------+------------------------------------+-------------------------------------+
+| On local machine   |  nc localhost 8002                 | while true; do nc -lv 8013; done    |
+| On remote machine  |  while true; do nc -lv 8012; done  | nc localhost 8003                   |
++--------------------+------------------------------------+-------------------------------------+
+| Options            |  -L 127.0.0.1:8002:127.0.0.1:8012  | -R 127.0.0.1:8013:127.0.0.1:8003    |
++--------------------+------------------------------------+-------------------------------------+
+
+ 

@@ -1,0 +1,53 @@
+-------------------------
+Настройки на клиенте
+-------------------------
+
+Settings -> Languages&Frameworks -> PHP -> Servers
+
+Добавляем сервер
+- Нажимаем на "плюс"
+- Вводим name,         например : "my-project-server"
+- Вводим host, такой же как name: "my-project-server"
+- Нажимаем "Use path mapping"
+- Напротив корневой папки в "Project files" указываем путь к папке на сервере
+
+Settings -> Languages&Frameworks -> PHP -> Debug
+
+0. Xdebug / Debug port - Порт на котором PHPStorm будет слушать запросы от xdebug (По умолчанию 9000)
+1. Preconfiguration / Start Listening (Нажать, "трубка станет слушать")
+
+-------------------------
+Настройки на сервере
+-------------------------
+
+1. На сервере должен быть включен xdebug
+
+; -- Mininum config  ------------------------------------------------------------------
+zend_extension=xdebug.so
+
+xdebug.remote_enable=on ; should xdebug try to contact a debug client
+xdebug.extended_info=1  ; [< v2.8] allows do file/line breakpoints with the remote debugger
+
+; xdebug.remote_handler=dbgp ; only supported protocol (default)
+; -------------------------------------------------------------------------------------
+
+2. PHP должен видеть две переменные окружения XDEBUG_CONFIG и PHP_IDE_CONFIG
+
+2.1. export XDEBUG_CONFIG="idekey=PHPSTORM remote_host=192.168.16.141 remote_port=9000"
+
+remote_host - IP Вашей рабочей машины где запущен PHPStorm
+remote_port - Порт на котором PHPStorm слушает запросы от xdebug
+
+2.2. export PHP_IDE_CONFIG='serverName=my-project-server'
+
+serverName - Имя сервера который будет использовать PHPStorm для маппинга с файлами на сервере
+
+IP Вашей рабочей машины можно подсмотреть в PHPStorm в поле "Automatically detect IDE IP"
+в разделе Settings -> Languages&Frameworks -> PHP -> Debug -> Zend Debbuger
+
+-----------------------------
+Как проверить
+-----------------------------
+
+Ставим breakpoint на первой исполняемой строке index.php и запускаем `php index.php`
+PHPStorm должен останиться на breakpoint-е

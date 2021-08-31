@@ -1,0 +1,78 @@
+export LESSCHARSET='utf-8'
+export LESS='-J -M -R -i --follow-name -x4 -j3'
+
+# -L Не учитывает LESSOPEN
+# export LESS='-R -L -i --follow-name -x4'
+
+# При просмотре файла в режиме слежения экран начинает мерцать
+# export LESSOPEN='|$BOBASH_DIR/bin/lesspipe.sh %s'
+
+less-key-update() {
+    if ! which lesskey > /dev/null; then
+        echo "lesskey is not present in system" >&2
+
+        return 1
+    fi
+
+    declare fa_lesskey="$BOBASH_DIR/etc/.lesskey"
+
+    if [[ -f "$fa_lesskey" ]] && [[ "$fa_lesskey" -nt ~/.less || ! -e ~/.less ]]; then
+        lesskey "$fa_lesskey"
+    fi
+}
+less-key-update
+
+less-open() {
+    LESSOPEN='|$BOBASH_DIR/bin/lesspipe.sh %s' less "$@"
+}
+
+less-color() { less-open "$@"; }
+
+
+less-blue() {
+    export LESS_TERMCAP_mb=$'\033[01;31m'
+    export LESS_TERMCAP_md=$'\033[01;38;5;74m'
+    export LESS_TERMCAP_me=$'\033[0m'
+    export LESS_TERMCAP_se=$'\033[0m'
+    export LESS_TERMCAP_so=$'\033[38;5;227m'
+    export LESS_TERMCAP_ue=$'\033[0m'
+    export LESS_TERMCAP_us=$'\033[04;38;5;146m'
+
+    # export LESS_TERMCAP_so=$'\033[01;24;33m'
+    # export LESS_TERMCAP_so=$'\033[38;5;246m'
+}
+
+less-green() {
+    export LESS_TERMCAP_mb=$'\033[01;36m'
+    export LESS_TERMCAP_md=$'\033[01;32m'
+    export LESS_TERMCAP_me=$'\033[0m'
+    export LESS_TERMCAP_mu=$'\033[01;37m'
+    export LESS_TERMCAP_se=$'\033[0m'
+    export LESS_TERMCAP_so=$'\033[01;44;33m'
+    export LESS_TERMCAP_ue=$'\033[0m'
+    export LESS_TERMCAP_us=$'\033[01;36m'
+}
+
+less-gblue() {
+    export LESS_TERMCAP_mb=$'\033[01;36m'
+    export LESS_TERMCAP_md=$'\033[01;32m'
+    export LESS_TERMCAP_me=$'\033[0m'
+    export LESS_TERMCAP_mu=$'\033[01;37m'
+    export LESS_TERMCAP_se=$'\033[0m'
+    export LESS_TERMCAP_so=$'\033[01;44;33m'
+    export LESS_TERMCAP_ue=$'\033[0m'
+    export LESS_TERMCAP_us=$'\033[01;36m'
+}
+
+less-common() {
+    export LESS_TERMCAP_mb=''
+    export LESS_TERMCAP_md=''
+    export LESS_TERMCAP_me=''
+    export LESS_TERMCAP_mu=''
+    export LESS_TERMCAP_se=''
+    export LESS_TERMCAP_so=''
+    export LESS_TERMCAP_ue=''
+    export LESS_TERMCAP_us=''
+}
+
+less-blue

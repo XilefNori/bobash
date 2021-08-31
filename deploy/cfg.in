@@ -1,0 +1,6 @@
+SRC="${BASH_SOURCE[0]//\\//}"
+[[ -z "$SRC" ]] && SRC="$(readlink -f $0)"
+DIR="$(cd -P "${SRC%/*}" > /dev/null && pwd)"
+
+export BOBASH_DIR_DEPLOY="$DIR"
+echo "BOBASH_DIR_DEPLOY=$BOBASH_DIR_DEPLOY"

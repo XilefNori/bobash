@@ -1,0 +1,107 @@
+# dos2unix: Binary symbol 0x1B found at line 2
+# dos2unix: Skipping binary file stdin
+
+[[ -z $DIR_PHP ]] && DIR_PHP=c:/php
+
+php-add-dir() {
+	if [[ -x "$DIR_PHP/php" ]]; then
+		path-add $(cygpath -u "$DIR_PHP")
+	fi
+}
+
+php-rm-dir() {
+	path-rm $(cygpath -u "$DIR_PHP")
+}
+
+php-version() {
+	which php
+	php -v
+}
+
+php-switch() {
+	if path-has "$(cygpath -u "$DIR_PHP")"; then
+		php-rm-dir
+	else
+		php-add-dir
+	fi
+
+	php-version
+}
+
+php-add-dir
+
+# php() {
+# 	"$DIR_PHP/php" "$@" -c "$DIR_PHP"
+# }
+
+# if ! which php >& /dev/null; then
+# fi
+
+if [[ -d $DIR_OPENSERVER ]]; then
+	DIR_PHP_MODULES="$DIR_OPENSERVER/modules/php/"
+
+	php53() { "$DIR_PHP_MODULES/PHP-5.3/php" "$@"; }
+	php54() { "$DIR_PHP_MODULES/PHP-5.4/php" "$@"; }
+	php55() { "$DIR_PHP_MODULES/PHP-5.5/php" "$@"; }
+	php56() { "$DIR_PHP_MODULES/PHP-5.6/php" "$@"; }
+	php70() { "$DIR_PHP_MODULES/PHP-7.0/php" "$@"; }
+	php71() { "$DIR_PHP_MODULES/PHP-7.1/php" "$@"; }
+	php72() { "$DIR_PHP_MODULES/PHP-7.2/php" "$@"; }
+	php73() { "$DIR_PHP_MODULES/PHP-7.3/php" "$@"; }
+
+	if [[ -d "$DIR_OPENSERVER\userdata\temp\config" ]]; then
+		php() {
+			command php -c "$DIR_OPENSERVER\userdata\temp\config" "$@"  | dos2unix --keep-utf16 --safe  --keep-bom ;
+
+			return ${PIPESTATUS[0]}
+		}
+	fi
+else
+	:
+	# php() {
+	# 	command php "$@" | dos2unix --keep-utf16 --safe  --keep-bom ;
+	#
+	# 	return ${PIPESTATUS[0]}
+	# }
+fi
+
+# php() { in_path z: php.exe "$@" | cat; }
+
+
+[[ -n $FILE_PHP_LOG ]] && PHP_LOG="$FILE_PHP_LOG"
+
+phpdoc() {
+    PHP_PEAR_BIN_DIR="$PHP_DIR/PEAR/phpdoc/bin" phpdoc.bat "$@";
+}
+
+# pear() { pear.bat "$@"; }
+# alias pci='pci.bat'
+# alias pciconf='pciconf.bat'
+# alias pdepend='pdepend.bat'
+# alias pear='pear.bat'
+# alias peardev='peardev.bat'
+# alias pecl='pecl.bat'
+# alias phar.phar='phar.phar.bat'
+# alias phing='phing.bat'
+# alias phpcpd='phpcpd.bat'
+# alias phpcs='phpcs.bat'
+# alias phploc='phploc.bat'
+# alias phpmd='phpmd.bat'
+# alias phpunit='phpunit.bat'
+
+php-gcl() { php -r "`getclip`" ;}
+
+
+php-gcl-echo() {
+    code="`getclip`";
+    echo "<?php"
+    echo "$code"
+    echo "?>"
+    php -r "$code"
+}
+
+print-tree() { php "$(cygpath -w `which print_tree.php`)" "$@" |  iconv -f CP1251 -t UTF-8; }
+
+if which psysh 2> /dev/null >&2; then
+	alias psysh='php $(cygpath -m $(which psysh))'
+fi

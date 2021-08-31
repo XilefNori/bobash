@@ -1,0 +1,75 @@
+# Необходимо для работы X-Server'a из под MinTTY
+export DISPLAY=:0.0
+
+# disable creating stackdump files in child processes
+ulimit -c 0
+
+export CMD="bash"
+export CYGWIN="winsymlinks nodosfilewarning"
+
+alias cygc=cygcheck
+alias cygs=cygstart
+alias cygp=cygpath
+
+alias wwd='cygpath -w `pwd`'
+alias mwd='cygpath -m `pwd`'
+
+# ----------------------------------------------------------------------
+
+alias ps='ps -Wae'
+alias gcl-len='s=`getclip`; echo "[$s]: `echo -n "$s" | wc -m`"'
+alias len-gcl='s=`getclip`; echo "[$s]: `echo -n "$s" | wc -m`"'
+alias cwget='wget "`getclip`"'
+alias cdc='cd "`getclip`"'
+alias pdc='cygpath -m "`pwd`" | unix2dos | putclip'
+alias rg='regtool'
+alias htb='htb -4 -l -n'
+
+alias hndlcd="handle \"$(cygpath -m "`pwd`" | awk -F'/' '{ print $(NF -1)"\\"$NF }')\""
+
+# ----------------------------------------------------------------------
+
+deploy-bash() { "$BOBASH_DIR/ssh/deploy.sh" "$@"; }
+
+clip-no-newline() {
+    getclip | dos2unix | tr -d '\n' | putclip
+}
+
+which-w () {
+	declare f="$(which $@)"
+	[[ -n $f ]] && {
+		declare d="$(dirname "$f")"
+		declare f="$(basename "$f")"
+
+		{
+			pushd "$d"
+			compgen -f "$f.exe" && f="$f.exe"
+			popd  2> /dev/null
+		} 2> /dev/null 1>&2
+
+		cygpath -w "$d/$f";
+	}
+}
+complete -c which-w
+
+
+gcl() { getclip | dos2unix; }
+pcl() { putclip | dos2unix; }
+
+gcl-dot() {
+	declare t=$(gcl)
+	t="${t//$'\n'/,}"
+	echo $t
+
+	# echo 'saved to clip'
+	# echo $t | pcl;
+}
+
+pcl-dot() {
+	declare t=$(gcl-dot)
+	echo $t
+	echo 'saved to clip'
+
+	echo $t | pcl;
+}
+

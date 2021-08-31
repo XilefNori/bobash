@@ -1,0 +1,30 @@
+#ack is a tool like grep, designed for programmers with large trees of heterogeneous source code
+
+#to install ack, see http://betterthangrep.com/
+#to use ack, launch terminal (mac osx) and type 'ack <some_keywords>'
+#ack will search all files in the current directory & sub-directories
+
+#here's how I have my config file setup. this file is located on mac osx here
+# ~/.ackrc
+
+# Always sort the files
+--sort−files
+
+# Always color, even if piping to a another program
+# --color
+
+# Use "less −r" as my pager
+# --pager
+# less -r
+
+--ignore-dir=.idea
+--ignore-dir=vendor
+--ignore-dir=log
+--ignore-dir=tmp
+--ignore-dir=doc
+
+
+--smart-case
+--sort-files
+--follow
+--group

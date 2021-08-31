@@ -1,0 +1,179 @@
+ var() { wrapper-help       var  "$@" ; }
+_var() { _wrapper-complete  var       ; }
+complete -v -F _var var
+
+_var-cfg() {
+    declare cmd="$1"
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare opts="$("$cmd" -A)";
+
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0
+    fi
+}
+
+var-cfg() {
+    declare prefix="$1"
+    shift 1
+
+    declare environment
+
+    # -- Arguments --
+    declare flags="AOep" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) set | grep -oP "^${prefix}_\w+=" | sed "s:^${prefix}_::; s:=$::" | tr '[:upper:]_' '[:lower:]-' ; return ;;
+            p) environment=0 ;;
+            e) environment=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare var="${prefix}_VIEW_CONFIG_AS_ENV"
+    [[ -z $environment ]] && environment="${!var}"
+
+    declare var
+    if [[ "${#params[@]}" -gt 0 ]]; then
+        var="${prefix}_$(echo "${params[0]}" | tr '[:lower:]-' '[:upper:]_')"
+    fi
+
+    if [[ "${#params[@]}" -gt 1 ]]; then
+        declare -g "$var=${params[1]}";
+    fi
+
+    {
+        if [[ -z ${params[0]} ]]; then
+            set | grep -P "^${prefix}_\w+="
+
+            return 0
+        fi
+
+        if [[ "${#params[@]}" -gt 1 ]]; then
+            set | grep -P "^$var="
+        else
+            set | grep -P "^$var\w*="
+        fi
+    } | {
+        if [[ $environment -gt 0 ]]; then
+            cat
+        else
+            sed -re "s:${prefix}_(\w+):\L\1:" -e 's:=:\t:' | awk '{ gsub("_","-",$1); print }' FS='\t' OFS='\t' | column -s$'\t' -t
+        fi
+    } | {
+        if [[ -z ${params[0]} ]]; then less -FX; else cat; fi
+    }
+}
+
+var-grep() {
+    set | grep -P ^$1
+}
+
+var-drop() {
+    declare var="$1"
+    var-save "$var"
+
+    declare -g "${var}="
+
+    echo "$var=${!var}"
+}
+complete -v var-drop
+
+var-save() {
+    declare var="$1"
+    declare saved="${1}_SAVED"
+    unset "$saved"
+
+    if [[ "$(declare -p $var)" =~ "declare -a" ]]; then
+        var="$var[*]"
+
+        declare -a -g "$saved=(${!var})"
+    else
+        declare -g "$saved=${!var}"
+    fi
+
+    set | grep -P "^$saved="
+}
+complete -v var-save
+
+var-list() ( set -o posix ; set )
+
+var-load() {
+    declare var="$1"
+    declare saved="${1}_SAVED"
+    unset "$var"
+
+    if [[ "$(declare -p $saved)" =~ "declare -a" ]]; then
+        saved="$saved[*]"
+
+        declare -g -a "${var}=(${!saved})"
+    else
+        declare -g "${var}=${!saved}"
+    fi
+
+    set | grep -P "^$var="
+}
+
+_var-load() {
+    declare list="$(compgen -v | grep -P '_SAVED$' | sed 's~_SAVED~~')"
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -gt 0 ]] ; then
+        COMPREPLY=( $( compgen -W "${list}" -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+complete -F _var-load var-load
+
+var-show() {
+    var-echo "$@"
+}
+complete -v var-show
+
+var-echo() {
+    declare values names strict
+    # -- Arguments --
+    declare flags="Svn" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            v) values=1 ;;
+            n) names=1 ;;
+            S) strict=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare name
+    for name in "${params[@]}"; do
+        declare mask="^$name[^=]*="
+
+        if [[ $strict -gt 0 ]]; then
+            mask="^$name="
+        fi
+
+        set | grep -P "$mask" | sort | {
+            if [[ -n $values ]]; then
+                sed -r "s:$mask::"
+            elif [[ -n $names ]]; then
+                sed -r 's:^(\w+)=.*:\1:'
+            else
+                cat
+            fi
+        }
+    done
+}
+
+complete -v var-echo

@@ -1,0 +1,37 @@
+# my tools aliases
+
+get-pwd() { gen-pwd.sh "$@" | putclip; }
+gen-pwd() { gen-pwd.sh "$@"; }
+
+old-gen-pwd() {
+    [ -z "$1" ] && word="`date`" || word="$1"
+
+    echo "$word" | sha1sum | cut -c -39 | md5sum | cut -c -15
+}
+
+edit() {
+	for i in "$@"; do
+		notepad++ "$(cygpath -w "`readlink -f "$(cygpath -u "$1")"`")" &
+	done
+}
+
+view() {
+	for i in "$@"; do
+		lister "$(cygpath -w "`readlink -f "$(cygpath -u "$1")"`")" &
+	done
+}
+
+cygpath-abs-win() {
+	cygpath -w "$(readlink -f "$1")"
+}
+
+hardlink() {
+	declare src="$1"
+	declare link="$2"
+
+	src=$(cygpath-abs-win "$src")
+	link=$(cygpath-abs-win "$link")
+
+	echo "creating link $link to $src" >&2
+	fsutil hardlink create "$link" "$src"
+}

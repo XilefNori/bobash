@@ -1,0 +1,47 @@
+; /etc/php/**/php.ini    or
+; /etc/php/**/xdebug.ini
+
+; -- Mininum config  ------------------------------------------------------------------
+zend_extension=xdebug.so
+
+xdebug.remote_enable=on ; should xdebug try to contact a debug client
+xdebug.extended_info=1  ; [< v2.8] allows do file/line breakpoints with the remote debugger
+
+; xdebug.remote_handler=dbgp ; only supported protocol (default)
+; -------------------------------------------------------------------------------------
+
+; -- Profiler  ------------------------------------------------------------------------
+xdebug.profiler_enable=0
+xdebug.profiler_output_dir="/var/www/html"
+; -------------------------------------------------------------------------------------
+
+; -- SET BY XDEBUG_CONFIG  ------------------------------------------------------------
+; These below parameters are set by XDEBUG_CONFIG env variable, something like this:
+; export XDEBUG_CONFIG="idekey=PHPSTORM remote_host=192.168.16.141 remote_port=9001"
+
+; xdebug.idekey=PHPSTORM
+; xdebug.remote_port=9001
+; xdebug.remote_host=192.168.16.141
+; -------------------------------------------------------------------------------------
+
+; -- ONLY FOR LOCAL XDEBUG ------------------------------------------------------------
+; For skipping local xdebug with empty 'XDEBUG_CONFIG=' edit php.ini to have
+; xdebug.remote_port    = 10001 ; somewhere PHPStorm _NOT_ listening
+; xdebug.remote_timeout = 50    ; less wait for xdebug timeout on skipping xdebug
+; -------------------------------------------------------------------------------------
+
+; -- ONLY FOR DEBUG xdebug ------------------------------------------------------------
+; File to which all remote debugger communications are logged
+; xdebug.remote_log       = "/var/www/log/xdebug.log"
+; xdebug.remote_log_level = 7 [> v2.8]
+; -------------------------------------------------------------------------------------
+
+; -- DOES NOT WORK! -------------------------------------------------------------------
+; Will always attempt to start a remote debugging session and try to connect to a client,
+; even if the GET/POST/COOKIE variable was not present.
+; See: https://bugs.xdebug.org/view.php?id=1465 (Xdebug initiates remote debug for every request)
+;
+; The only way to prevent a debug session is to include XDEBUG_SESSION_STOP in the URL
+;
+; xdebug.remote_autostart=off
+; --------------------------------------------------------------------------------------

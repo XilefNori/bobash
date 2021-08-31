@@ -1,0 +1,74 @@
+CHEAT_LESS_OPTS="+g -L -J -I -F"
+
+cheat() {
+    declare da_cheatsheets="$BOBASH_DIR/etc/cheatsheets"
+
+    declare color=1
+    declare LB='\E[01;38;5;74m'
+    declare NC='\E[0m'
+
+    declare edit text width
+    # -- Arguments --
+    declare flags="etgw:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            e) edit=1 ;;
+            t) text=1 ;;
+            w) width="${OPTARG}" ;;
+            g) gutter=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+
+    if [[ "${#params[@]}" == 0 ]]; then
+        # find "$da_cheatsheets" -type f -printf "%f\n"
+        # -exec basename "{}" '.txt' \;
+        find "$da_cheatsheets" -type f -o -type l | sed -re "s:^$da_cheatsheets/::; s:.(txt|md)$::"
+    else
+        declare name="${params[0]}"
+        declare title="$(echo "$name" | tr '[:lower:]' '[:upper:]')"
+
+        declare file=
+
+        [[ -f "$da_cheatsheets/$name.txt" ]] && file="$da_cheatsheets/$name.txt"
+        [[ -f "$da_cheatsheets/$name.md"  ]] && file="$da_cheatsheets/$name.md"
+
+        [[ -n $file ]] || { echo "No cheat: $name" >&2; return 1; }
+
+
+        if [[ -n $edit  ]]; then
+            "$EDITOR" "$file"
+        else
+            if [[ $file =~ .+\.md$ && -z $text ]]; then
+                less-open "$file" "${less_opts[@]}"
+            else
+                {
+                    echo -e "\n$LB:: $title ::$NC\n"
+
+                    { [[ -n $width  ]] && fold -w "$width" -s "$file" || cat "$file"; } |
+                    { [[ -n $gutter ]] && sed 's:^:\t:'               || cat        ; }
+
+                } | less "$CHEAT_LESS_OPTS"
+            fi
+        fi
+    fi
+}
+
+_cheat() {
+    files=$(cheat)
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -gt 0 ]] ; then
+        COMPREPLY=( $( compgen -W "${files}" -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+complete -F _cheat cheat

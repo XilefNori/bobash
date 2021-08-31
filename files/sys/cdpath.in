@@ -1,0 +1,114 @@
+export CDPATH
+
+BIN_GREP="$(which grep)"
+BIN_SED="$(which sed)"
+BIN_AWK="$(which awk)"
+
+_f_grep() { "$BIN_GREP" "$@"; }
+_f_sed()  { "$BIN_SED" "$@"; }
+_f_awk()  { "$BIN_AWK" "$@"; }
+
+cdpath() { echo -e "${CDPATH//:/\\n}" | _f_sed "s:/\+$::"; }
+
+cdpath-add() {
+	declare add verbose
+
+    # -- Arguments --
+    declare flags="va" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=1 ;;
+			a) add=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+	exec 3>/dev/null
+	[[ -n $verbose ]] && exec 3>&2
+
+	declare filepath
+
+	{
+		for filepath in "${params[@]}"; do
+            filepath="${filepath%/}"
+
+			[[ ! -d $filepath ]] && { echo "Directory not exists [$filepath]"; return 1; }
+
+			if ! cdpath-has "$filepath"; then
+				if [[ -n $add ]]; then
+					CDPATH="$CDPATH:$filepath"
+				else
+					CDPATH="$filepath:$CDPATH"
+				fi
+			else
+				echo "Already in cdpath [$filepath]"
+			fi
+		done
+	} >&3
+
+	exec 3>&-
+}
+
+cdpath-has() {
+	cdpath | _f_grep "^${1%/}$" -q;
+}
+
+cdpath-rm() {
+	declare verbose
+
+    # -- Arguments --
+    declare flags="v" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+	exec 3>/dev/null
+	[[ -n $verbose ]] && exec 3>&2
+
+	declare filepath
+
+	{
+		for filepath in "${params[@]}"; do
+            filepath="${filepath%/}"
+
+			if ! cdpath-has "$filepath"; then
+				echo "No in cdpath [$filepath]"
+			else
+				CDPATH="$(cdpath | _f_grep -v "^$filepath$" | _f_awk -v ORS=: '{print}' | _f_sed 's/:*$//')"
+			fi
+		done
+	} >&3
+
+	exec 3>&-
+}
+
+cdpath-readd() {
+    declare verbose
+    declare cdpath_opts=()
+
+    # -- Arguments --
+    declare flags="va" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=1 ;;
+            a) cdpath_opts+=(-a) ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    [[ -n $verbose ]] && exec 3>&2
+
+    cdpath-rm                      "${params[@]}"
+    cdpath-add "${cdpath_opts[@]}" "${params[@]}"
+
+    exec 3>&-
+}

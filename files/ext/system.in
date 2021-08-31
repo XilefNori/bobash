@@ -1,0 +1,64 @@
+# Functions -------------------------------------------------------------
+
+bin-exist() { which "$1" > /dev/null 2>&1; }
+func-exists() { declare -f "$1" > /dev/null; }
+
+in_path() {
+    pushd $1 > /dev/null
+    shift
+    "$@"
+    popd     > /dev/null
+}
+
+psl()  { command ps -Ws | grep -i "$1.*\.";    }
+pid()  { psl $1 | awk '{ print $1; }'; }
+
+my_ps() { ps $@ -u $USER -o pid,%cpu,%mem,bsdtime,command ; }
+pp()    { my_ps f | awk '!/awk/ && $0~var' var=${1:-".*"} ; }
+
+quiet-exec() {
+    err=`mktemp`
+    out=`mktemp`
+
+    "${@}" > $out 2> $err
+    r=$?
+    if [ $r -ne 0 ]; then
+        [ -s "$err" ] && log="$err" || log="$out"
+
+        echo "Error in [${@}] logged in [$log]"
+        cat $log
+    fi
+
+    return $r
+}
+
+bash-icmd() {
+    exec bash --rcfile <(echo "source $HOME/.bashrc; $*") -i
+}
+
+pushdq() { command pushd "$@" > /dev/null; }
+popdq()  { command popd  "$@" > /dev/null; }
+
+users-ls() { cut -f1 -d: /etc/passwd; }
+
+chmod-access() {
+    chmod u+rwX,go+rwX,o-w "$@"
+}
+
+chacc() {
+    declare user="$1"
+    [[ -z $user ]] && user="$(whoami)"
+    shift 1
+    grep -qP "^$user$" <(users-ls) || { warning "User: '$user' not found!"; return 1; }
+
+    if [[ $# -eq 0 ]]; then
+        declare options=(. -R)
+    else
+        declare options=("$@")
+    fi
+
+    chmod-access  "${options[@]}"
+    chown "$user" "${options[@]}"
+}
+
+complete -F _chown chacc

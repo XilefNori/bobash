@@ -1,0 +1,2 @@
+path-readd "$BOBASH_DIR/bin"
+path-readd "$HOME/bin"

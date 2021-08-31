@@ -1,0 +1,42 @@
+-- TL;DR -----------------------
+
+USE 
+
+# Make git auto convert crlf -> lf on commit to repository
+git config core.autocrlf input 
+
+# Make git checkout with lf ending
+git config core.eol lf
+
+# Index Reload
+
+git rm --cached -r .
+git reset --hard
+
+-- Git funcitons ---------------
+
+git-eol autocrlf input -R # OR
+git-eol eol      lf    -R
+
+-- Description ------------------
+
+http://git-scm.com/docs/gitattributes/1.8.2.1
+
+The best explanation of how core.autocrlf works is found on the gitattributes man page, in the text attribute section.
+
+This is how core.autocrlf appears to work currently (or at least since v1.7.2 from what I am aware):
+
+core.autocrlf = true
+Text files checked-out from the repository will have LF EOL characters normalized to CRLF in your working tree. Text files in your working tree with CRLF EOL characters are normalized to LF when committed back to the repository.
+
+core.autocrlf = input
+Text files checked-out from the repository will keep original EOL characters in your working tree.
+Text files in your working tree with CRLF EOL characters are normalized to LF when committed back to the repository.
+
+core.autocrlf = false
+core.eol dictates EOL characters in the text files of your working tree.
+core.eol = native by default, which means Windows EOLs are CRLF and Unix-based OS are LF in working trees.
+
+Repository gitattributes settings determines EOL character normalization for commits to the repository (default is normalization to LF EOL characters).
+
+I've only just recently researched this issue and I also find the situation to be very convoluted. The core.eol setting definitely helped clarify how EOL characters are handled by git.

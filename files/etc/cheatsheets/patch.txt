@@ -1,0 +1,64 @@
+== Summary ==========================================================
+
+# Create file patch
+diff -u old.c new.c > old.patch
+
+patch      < old.patch   # apply patch to 'old.c' and make it like 'new.c'
+patch old2.c old.patch   # apply patch to 'old2.c'
+
+# Create tree patch
+diff -Naur /usr/src/openvpn-2.3.2 /usr/src/openvpn-2.3.4 > openvpn.patch
+
+cd /usr/src
+patch -p3            < /root/openvpn.patch # Ingnore 3 leading slashes
+
+# Options
+
+patch -R             < hello.patch         # Revert applied patch
+patch --dry-run      < hello.patch         # Test run without patching
+patch -b             < hello.patch         # Backup with postfix '.orig'
+patch -b -V numbered < hello.patch         # Backup with postfix '.~2~'
+patch -pN            < /root/openvpn.patch # Ingnore N leading slashes
+
+== Single file ======================================================
+
+# Create patch
+diff -u old.c new.c > old.patch
+
+# hello.patch contents
+> --- old.c 2014-10-07 18:17:49.000000000 +0530
+> +++ new.c 2014-10-07 18:17:54.000000000 +0530
+
+# Apply patch
+
+# Will apply patch to 'old.c' and make it like 'new.c'
+patch < old.patch
+
+# Will apply patch to 'old2.c'
+patch old2.c old.patch
+
+== Source tree ======================================================
+
+# Create patch
+diff -Naur /usr/src/openvpn-2.3.2 /usr/src/openvpn-2.3.4 > openvpn.patch
+
+# Apply patch
+
+cd /usr/src/
+
+# Will apply patch skipping 3 leading slashes
+patch -p3 < /root/openvpn.patch
+
+> patching file openvpn-2.3.2/aclocal.m4
+> patching file openvpn-2.3.2/build/Makefile.in
+> patching file openvpn-2.3.2/build/msvc/Makefile.in
+
+== Backup ==========================================================
+
+# Will make backup like old.c.orig
+patch -b             < old.patch
+
+# Will make backup like old.c.~1~
+patch -b -V numbered < old.patch
+
+

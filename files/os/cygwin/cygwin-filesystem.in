@@ -1,0 +1,49 @@
+FILEPATH_TYPE='-m'
+
+filepath() { cygpath "$FILEPATH_TYPE" "$1"; }
+
+is_junction() {
+    target="$(junction.exe "$1" | sed -n "/ *Substitute Name: /{s///; p}")"
+    [ -n "$target" ] && cygpath -u "$target"
+}
+
+mklink() {
+    cmd.exe /C mklink "$@"
+}
+
+
+# junctions-to-links() {
+#     echo 'Converting juncs to links...'
+
+#     # links=(`find -type l -printf '%l\n'`)
+#     links=(`find -type l -printf '%p:%l\n'`)
+
+#     for pair in "${links[@]}"; do
+#         link=${pair%:*}
+#         file=${pair#*:}
+
+#         echo "$link -> $file"
+
+#         if [[ -d $file ]]; then
+#             junc2link.sh "$link"
+#         fi
+#     done
+# }
+
+# links-to-junctions() {
+#     echo 'Converting links to junctions...'
+
+#     # links=(`find -type l -printf '%l\n'`)
+#     links=(`find -type l -printf '%p:%l\n'`)
+
+#     for pair in "${links[@]}"; do
+#         link=${pair%:*}
+#         file=${pair#*:}
+
+#         echo "$link -> $file"
+
+#         if [[ -d $file ]]; then
+#             link2junc.sh "$link"
+#         fi
+#     done
+# }

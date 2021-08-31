@@ -1,0 +1,118 @@
+_complete-cmd2() {
+    declare cmd="$1";
+    declare cur="${COMP_WORDS[COMP_CWORD]}";
+    declare -a params=("${COMP_WORDS[@]:1:${#COMP_WORDS[@]}-2}")
+
+    COMPREPLY=();
+    if [[ "${cur:0:1}" == '-' ]]; then
+        declare opts="$($cmd -O)";
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0;
+    fi;
+
+    if [[ "${cur:0:1}" != '-' ]]; then
+        declare files="$($cmd "${params[@]}")";
+        COMPREPLY=($( compgen -W "${files}" -- "$cur" ));
+        return 0;
+    fi;
+    return 0
+}
+
+_complete-cmd() {
+    declare cmd="${COMP_WORDS[0]##*/}";
+    declare cur="${COMP_WORDS[COMP_CWORD]}";
+    declare -a params=("${COMP_WORDS[@]:1:${#COMP_WORDS[@]}-2}")
+
+    COMPREPLY=();
+    if [[ "${cur:0:1}" == '-' ]]; then
+        declare opts="$($cmd -O)";
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0;
+    fi;
+
+    if [[ "${cur:0:1}" != '-' ]]; then
+        declare files="$($cmd "${params[@]}")";
+        COMPREPLY=($( compgen -W "${files}" -- "$cur" ));
+        return 0;
+    fi;
+    return 0
+}
+
+_complete-cmd-options() {
+	declare flags="$1"
+	flags="${flags//:/}"
+	flags="${flags/O/}"
+
+	echo "$flags" | sed 's/./-\0\n/g'
+}
+
+complete-option() {
+    complete | grep -P -- "(?= $1\$)"
+}
+complete -A function complete-option
+
+complete-function() {
+    declare -a grep_opts
+    declare verbose=0
+
+    # -- Arguments --
+    declare flags="v" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=$((verbose+1)) ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    if [[ $verbose -ge 2 ]] ; then
+        declare func="$(complete | grep -oP -- "(?<=-F ).+(?= ${params[0]}\$)")"
+
+        type "$func" | less -XF
+    else
+        [[ $verbose -eq 0 ]] && grep_opts+=(-o)
+
+        complete | grep -P "${grep_opts[@]}" -- "(?<=-F ).+(?= ${params[0]}\$)"
+    fi
+}
+
+complete -c complete-function
+
+alias-complete() {
+    declare verbose=0
+
+    # -- Arguments --
+    declare flags="v" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=$((verbose+1)) ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare name="${params[0]}"
+    declare command="${params[1]}"
+
+    alias "$name"="$command"
+
+    declare complete
+    complete="$(complete-function -v "$command" | sed "s/$command\$/$name/")"
+
+    if [[ -z $complete ]] && declare -f "_completion_loader" > /dev/null; then
+        _completion_loader "$command"
+
+        complete="$(complete-function -v "$command" | sed "s/$command\$/$name/")"
+    fi
+
+    if [[ -n $complete ]]; then
+        $complete
+    fi
+
+    if [[ $verbose -gt 0 ]]; then
+        alias "$name"
+        complete-function "$name" -v
+    fi >&2
+}

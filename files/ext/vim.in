@@ -1,0 +1,19 @@
+vim() {
+	declare syntax
+    declare -a vim_opt
+
+    # -- Arguments --
+    declare flags="s:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            s) syntax="${OPTARG}" ;;
+    	esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    [[ -n $syntax ]] && vim_opt+=(-c "set syntax=$syntax")
+
+	command vim "${vim_opt[@]}" "${params[@]}"
+}

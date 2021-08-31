@@ -1,0 +1,140 @@
+# Add bash completion for ssh: it tries to complete the host to which you
+# want to connect from the list of the ones contained in ~/.ssh/known_hosts
+
+ssh-hosts() {
+    if [[ -f ~/.ssh/config ]]; then
+        grep -P '^Host\b' ~/.ssh/config | cutm 2 | grep -v '*' | sort -u
+    fi
+}
+
+_complete_ssh_hosts() {
+    declare cur hosts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    [[ $cur =~ '@' ]] && {
+        declare user=${cur%@*}
+
+        hosts="$(ssh-hosts | sed -e "s/^/$user@/")"
+    } || {
+        hosts="$(ssh-hosts)"
+    }
+
+
+    if [[ ! ${cur} == -* ]] ; then
+    	COMPREPLY=( $(compgen -W "${hosts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+ssh-env() {
+    echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
+    ls -l "$SSH_AUTH_SOCK"
+}
+
+ssh-throughput() {
+    pv /dev/zero | ssh "$@" 'cat > /dev/null'
+}
+
+ssh-norc() {
+    ssh -t "$@" bash --norc --noprofile
+}
+
+ssh-exec() {
+   declare -a input
+   declare home fa_script line IFS
+
+    # -- Arguments --
+    declare flags="c:f:h" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            f) fa_script="${OPTARG}" ;;
+            h) home=1 ;;
+            c) input+=("${OPTARG}") ;;
+    	esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    [[ -z $fa_script || ! -s $fa_script ]] && [[ -t 0 ]] && [[ -z $input ]] && {
+        warning 'Supply script (-f <file>) or command (-c <command>) or pipe '
+
+        return 1
+    }
+
+    if [[ -n $fa_script ]]; then
+        IFS=$'\r\n' input=($(cat "$fa_script" | sed -r '/^[[:space:]]*$/d'))
+    elif [[ -z $input ]]; then
+        while IFS= read -r line; do
+            [[ -z $line ]] && continue  # break if line is empty
+            input+=("$line")
+        done
+    fi
+
+    for host in "${params[@]}"; do
+        if [[ ${#params[@]} -gt 1 ]]; then
+            echo
+            echo -e "\n-- [${LW}$host${NC}] --\n"
+            # echo "-- EXEC in [$container_id] --"
+            echo
+        fi
+
+        # ( IFS=$'\n'; echo "${input[*]}" ) | ssh-exec-input.exp "$host" # expect
+        # ssh "$host" "$( IFS=$';'; echo "${input[*]}" )"                # cmd
+
+        declare cmd=''
+        declare ssh_home=''
+        if [[ -n $home ]]; then
+            ssh_home="$(ssh-node-home "$host")"
+            if [[ -n $ssh_home ]]; then
+                cmd="export HOME_REAL=\$HOME; HOME=$ssh_home; source \$HOME/.bashrc;"
+            else
+                echo "No special home is set for host: [$host]" >&2
+            fi
+        fi
+
+        (
+            echo "$cmd"
+            IFS=$'\n'; echo "${input[*]}"
+        ) | command ssh "$host" bash # stdin
+    done
+}
+
+ssh() {
+    declare home homedir
+
+    # -- Arguments --
+    declare flags=":h:H" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag 2> /dev/null && { case $flag in
+            H) home=1 ;;
+            h) homedir=${OPTARG} ;;
+            :) [[ -n ${OPTARG} ]] && params+=("-${OPTARG}") ;;
+            ?) [[ -n ${OPTARG} ]] && params+=("-${OPTARG}") ;;
+            *) echo "Unexpected: ${flag} ${OPTARG} ${OPTIND}" ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    if [[ -n $home && -z $homedir ]]; then
+        homedir="$(ssh-node-home "${params[0]}")"
+    fi
+
+    if [[ -n $homedir ]]; then
+        cmd="[[ -d '$homedir' ]] && { export HOME_REAL=\$HOME; HOME='$homedir'; }"
+        cmd="$cmd; exec bash --rcfile <(echo \"source \$HOME/.bashrc\")"
+
+        command ssh "${params[@]}" -t "$cmd"
+
+        return;
+    fi
+
+    command ssh "${params[@]}"
+}
+
+# complete -o default -o nospace -o bashdefault -F _complete_ssh_hosts ssh-norc ssh-throughput 2>/dev/null || \
+complete -o default -o nospace -F _complete_ssh_hosts ssh ssh-norc ssh-throughput ssh-exec
+

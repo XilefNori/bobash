@@ -1,0 +1,399 @@
+
+[Подключение модуля]
+zend_extension = /usr/lib/php5/20090626/xdebug.so
+
+[Основные]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Основные настройки                            ;
+; Документация http://www.xdebug.org/docs/basic ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Включение обработчика ошибок xDebug (заменяет стандартный вывод ошибок).
+;
+; Тип          boolean
+; По умолчанию 1
+; Документация http://www.xdebug.org/docs/all_settings#default_enable
+xdebug.default_enable = 1
+
+; Максимальный уровень рекурсии (превышение порога прекращает выполнение функции).
+;
+; Тип          integer
+; По умолчанию 100
+; Документация http://www.xdebug.org/docs/all_settings#max_nesting_level
+xdebug.max_nesting_level = 150
+
+; Отключение оператора подавления вывода ошибок "@".
+;
+; Тип          boolean
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#scream
+xdebug.scream = 1
+
+[Отображения переменных]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Данные настройки влияют на вывод переменных функцией var_dump() ;
+; Не влияют на отправляемые данные для удаленных клиентов         ;
+; Документация http://xdebug.com/docs/display                     ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Включение xDebug для перегрузки var_dump().
+;
+; Тип          boolean
+; По умолчанию 1
+; Документация http://www.xdebug.org/docs/all_settings#overload_var_dump
+xdebug.overload_var_dump = 1
+
+; Максимальное число выводимых элементов массива или свойств объекта.
+;
+; Тип          integer
+; По умолчанию 128
+; Документация http://www.xdebug.org/docs/all_settings#var_display_max_children
+xdebug.var_display_max_children = 256
+
+; Максимальный уровень вложенности элементов в массиве или свойстве объекта.
+;
+; Тип          integer
+; По умолчанию 3
+; Документация http://www.xdebug.org/docs/all_settings#var_display_max_depth
+xdebug.var_display_max_depth = 16
+
+; Максимальная длина выводимых строк.
+;
+; Тип          integer
+; По умолчанию 512
+; Документация http://www.xdebug.org/docs/all_settings#var_display_max_data
+xdebug.var_display_max_data = 1024
+
+[Трассировка стека]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Данные настройки влияют на информативность отображение стека трассировки ;
+; Вывод осуществляется при возникновении ошибок (предупреждений и т.п.)    ;
+; Документация http://xdebug.com/docs/stack_trace                          ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Отображение пути к файлу в инструкциях типа include/require.
+;
+; Тип          boolean
+; По умолчанию 1
+; Документация http://www.xdebug.org/docs/all_settings#collect_includes
+xdebug.collect_includes = 1
+
+; Отображение параметров, передаваемых при вызове функции.
+; Для больших сценариев может не хватить памяти для детализации параметров!
+;
+; Тип          integer
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#collect_params
+; Возможные значения:
+;     0 - не отображать
+;     1 - отображать тип и количество элементов (array(5), string(8))
+;     2 - то же, что и "1", только с выводом подсказок (не работает в версии CLI)
+;     3 - информация о переменных с учетом "Настройки отображения переменных"
+;     4 - вся информация о переменных, включая имена переменных
+xdebug.collect_params = 4
+
+; Сбор информации о переменных.
+; Данный параметр имеет смысл только если планируется использование функции 
+; xdebug_get_declared_vars().
+; Анализ может быть довольно медленным!
+;
+; Тип          boolean
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#collect_vars
+xdebug.collect_vars = 1
+
+; Отображение суперглобальных данных.
+; Данный параметр отвечает за отображение определенных данных из суперглобальных 
+; переменных при возникновении ошибки.
+;
+; Тип          string
+; По умолчанию ''
+; Документация http://www.xdebug.org/docs/all_settings#dump.*
+; Возможные варианты:
+;     xdebug.dump.COOKIE = 
+;     xdebug.dump.FILES = 
+;     xdebug.dump.GET = 
+;     xdebug.dump.POST = 
+;     xdebug.dump.REQUEST = 
+;     xdebug.dump.SERVER = 
+;     xdebug.dump.SESSION = 
+; Возможные значения:
+;     *           - отображать всё (xdebug.dump.REQUEST = *)
+;     'key1, ...' - отображать определенные значение 
+;                    (xdebug.dump.SERVER = REMOTE_ADDR,REQUEST_METHOD)
+xdebug.dump.REQUEST = *
+xdebug.dump.SESSION = *
+xdebug.dump.SERVER = REMOTE_ADDR,REQUEST_METHOD
+
+; Вывод информации, собранной из суперглобальных массивов.
+; Отображает результаты работы xdebug.dump.*
+;
+; Тип          boolean
+; По умолчанию 1
+; Документация http://www.xdebug.org/docs/all_settings#dump_globals
+xdebug.dump_globals = 1
+
+; Вывод информации, собранной из суперглобальных массивов при каждой ошибке.
+; Обычно суперглобальные массивы остаются неизменными на протяжении всего скрипта, 
+; поэтому нет смысла при выводе каждой ошибки отображать эти данные повторно.
+; Если значение установлено в 0 - данные выводятся каждый раз.
+; 
+; Тип          boolean
+; По умолчанию 1
+; Документация http://www.xdebug.org/docs/all_settings#dump_once
+xdebug.dump_once = 1
+
+; Вывод неопределенных значений суперглобальных массивов.
+; 
+; Тип          boolean
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#dump_undefined
+xdebug.dump_undefined = 1
+
+; Формат ссылки для имен файлов, выводимых при трассировке.
+; Данные ссылки предназначены для перехода к определенному файлу и строки в нем.
+; Для более детального изучения данного параметра обратитесь к документации.
+; Введен в Xdebug 2.1
+; 
+; Тип          string
+; По умолчанию ''
+; Документация http://www.xdebug.org/docs/all_settings#file_link_format
+xdebug.file_link_format = 
+
+; Формат ссылки на документацию для функций.
+; При нажатии на ссылку будет происходить переход по адресу, 
+; указанному в данном параметре + название функции.
+; 
+; Тип          string
+; По умолчанию http://www.php.net
+; Документация http://www.xdebug.org/docs/all_settings#manual_url
+xdebug.manual_url = http://www.php.net
+
+; Вывод стека трассировки исключения.
+; Действительно, даже если исключение было перехвачено.
+; 
+; Тип          integer
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#show_exception_trace
+xdebug.show_exception_trace = 1
+
+; Вывод информации о переменных в текущей области видимости.
+; Может выводить очень много информации и поэтому по умолчанию отключен.
+; 
+; Тип          integer
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#show_local_vars
+xdebug.show_local_vars = 1
+
+; Запись различий в памяти между вызовами функции.
+; Записывает в файлах трассировки при установленном xdebug.trace_format = 0.
+; 
+; Тип          integer
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#show_mem_delta
+xdebug.show_mem_delta = 1
+
+[Следы]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Данные настройки нужны для функций, помогающих понять принцип работы приложения ;
+; Документация http://xdebug.com/docs/execution_trace                             ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Включение трассировки функций автоматически.
+; Делает возможным слежение в auto_prepend_file
+; 
+; Тип          boolean
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#auto_trace
+xdebug.auto_trace = 1
+
+; Добавление значений переменных в след.
+; 
+; Тип          boolean
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#collect_assignments
+xdebug.collect_assignments = 1
+
+; Добавление возвращаемых функциями значений в след.
+; 
+; Тип          boolean
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#collect_return
+xdebug.collect_return = 1
+
+; Формат файла трассировки.
+; 0 - человеко-понятный, 1 - для обработки парсерами (программами для чтения)
+; 
+; Тип          integer
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#trace_format
+xdebug.trace_format = 1
+
+; Определение порядка записи файла.
+; 0 - перезапись существующего файла, 1 - добавление новой записи в конец файла
+; 
+; Тип          integer
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#trace_options
+xdebug.trace_options = 0
+
+; Директория для сохранения файлов трассировки.
+; 
+; Тип          string
+; По умолчанию /tmp
+; Документация http://www.xdebug.org/docs/all_settings#trace_output_dir
+xdebug.trace_output_dir = /var/www/xdebug/log
+
+; Формат именования файлов трассировки.
+; Спецификаторы:
+;     %c    crc32 текущего каталога             trace.%c    trace.1258863198.xt
+;     %p    pid (id процесса)                   trace.%p    trace.5174.xt
+;     %r    случайное число                     trace.%r    trace.072db0.xt
+;     %s    имя сценария (полный путь файла)*   trace.%s    trace._var_www_test_php
+;     %t    время в секудах с 01.01.1970        trace.%t    trace.1179434742.xt
+;     %u    время в микросекундах с 01.01.1970  trace.%u    trace.1179434749_642382.xt
+;     %H    $_SERVER['HTTP_HOST']*              trace.%H    trace.kossu.xt
+;     %R    $_SERVER['REQUEST_URI']*            trace.%R    trace._test_php_param_1
+;     %S    id сессии (берется из Cookie)       trace.%S    trace.c70c1e ... 0bbdd2a679d.xt
+;     %%    символ %                            trace.%%    trace.%%.xt
+; *) Все символы отличные от букв латинского алфавита и цифр будут заменены на символ "_"
+; 
+; Тип          string
+; По умолчанию trace.%c
+; Документация http://www.xdebug.org/docs/all_settings#trace_output_name
+xdebug.trace_output_name = trace.%c
+
+[Удаленная отладка]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Настройки интерфейса для удаленных клиентов ;
+; Документация http://xdebug.com/docs/remote  ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Генерация расширенной информации, необходимой для точек останова удаленного отладчика.
+; При включении исполняемый код увеличивается примерно на 33%, 
+; что делает скрипт немного медленнее.
+;
+; Тип          integer
+; По умолчанию 1
+; Документация http://www.xdebug.org/docs/all_settings#extended_info
+xdebug.extended_info = 1
+
+; Ключ для удаленных отладчиков.
+; Необходим для старта сессии удаленной отладки.
+;
+; Тип          string
+; По умолчанию *complex*
+; Документация http://www.xdebug.org/docs/all_settings#idekey
+xdebug.idekey = *complex*
+
+; Автоматический старт сеанса отладки без GET/POST запроса.
+; Обычно для старта сессии необходим специальный GET/POST запрос.
+; Если значение установлено в 1, xDebug будет пытаться начать сеанс отладки 
+; и подключение к клиенту без GET/POST параметров.
+;
+; Тип          boolean
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#remote_autostart
+xdebug.remote_autostart = 0
+
+; Включение режима удаленной отладки.
+;
+; Тип          boolean
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#remote_enable
+xdebug.remote_enable = 0
+
+; Протокол отладчика.
+; Xdebug 2.1 и поздние версии поддерживают только DBGp!
+;
+; Тип          string
+; По умолчанию dbgp
+; Документация http://www.xdebug.org/docs/all_settings#remote_handler
+xdebug.remote_handler = dbgp
+
+; Адрес компьютера, на котором расположен клиент отладчика.
+; Настройка игнорируется, если значение xdebug.remote_connect_back установлено в 1
+;
+; Тип          string
+; По умолчанию localhost
+; Документация http://www.xdebug.org/docs/all_settings#remote_host
+xdebug.remote_host = 192.168.0.99
+
+; Активация сеанса отладки со всеми, кто передал специальный GET/POST параметр на сервер.
+; Учтите, что сеанс могуть начать все, кто имеет доступ к серверу по http!
+;
+; Тип          boolean
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#remote_connect_back
+xdebug.remote_connect_back = 0
+
+; Путь к файл-логу для записи всех, кто обращался к отладчику.
+;
+; Тип          string
+; По умолчанию ''
+; Документация http://www.xdebug.org/docs/all_settings#remote_log
+xdebug.remote_log = /var/www/xdebug/log/access.log
+
+; Настройка подключения к клиенту отладки.
+; REQ - как только скрипт начал работать, JIT - при возникновении ошибки
+;
+; Тип          string
+; По умолчанию req
+; Документация http://www.xdebug.org/docs/all_settings#remote_mode
+xdebug.remote_mode = req
+
+; Порт, по которому xDebug пытается подключится к удаленному отладчику.
+;
+; Тип          integer
+; По умолчанию 9000
+; Документация http://www.xdebug.org/docs/all_settings#remote_port
+xdebug.remote_port = 9000
+
+[Профилирование]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Настройки, управляющие профилированием скриптов ;
+; Документация http://xdebug.com/docs/profiler    ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Определение порядка записи.
+; 0 - перезапись существующего файла, 1 - добавление новой записи в конец файла
+;
+; Тип          integer
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#profiler_append
+xdebug.profiler_append = 1
+
+; Включение режима профилирования.
+; Профилирование будет осуществляться при каждом запуске любого сценария.
+; Для более управляемого профилирования используйте установку xdebug.profiler_enable_trigger
+; 
+; Тип          integer
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#profiler_enable
+xdebug.profiler_enable = 1
+
+; Включения профилирования посредством специального GET/POST параметра.
+; Если значение установлено в 1, то при выполнении сценария с GET/POST
+; параметром XDEBUG_PROFILE профилирование будет выполнено вне зависимости 
+; от установки xdebug.profiler_enable.
+; Пример: http://www.example.com/?XDEBUG_PROFILE
+;
+; Тип          integer
+; По умолчанию 0
+; Документация http://www.xdebug.org/docs/all_settings#profiler_enable_trigger
+xdebug.profiler_enable_trigger = 1
+
+; Директория для сохранения файлов профилирования.
+;
+; Тип          string
+; По умолчанию /tmp
+; Документация http://www.xdebug.org/docs/all_settings#profiler_output_dir
+xdebug.profiler_output_dir = /var/www/xdebug/log
+
+; Формат именования файлов профилирования.
+; См. xdebug.trace_output_name
+; 
+; Тип          string
+; По умолчанию cachegrind.out.%p
+; Документация http://www.xdebug.org/docs/all_settings#profiler_output_name
+xdebug.profiler_output_name = cachegrind.out.%p

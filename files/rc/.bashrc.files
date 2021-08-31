@@ -1,0 +1,85 @@
+# System
+
+bobash_load_packages() {
+    for da_package in "$@"; do
+        [[ ! -d "$da_package" ]] && continue
+        [[ -n "$BOBASH_LOAD_VERBOSE" ]] && { echo "$da_package"  >&2 ; }
+
+        if [[ $(basename $(dirname "$da_package")) == 'pack' ]]; then
+            modules=($(find -L "$da_package/src/mod" -name "*.in" | sort))
+            modules+=($(find -L "$da_package/src/config" -name "*.in" | sort))
+        else
+            modules=($(find -L "$da_package" -name "*.in" | sort))
+        fi
+
+        bobash_load_files "${modules[@]}"
+    done
+}
+
+bobash_load_files() {
+    for module in "$@"; do
+        [[ -n "$BOBASH_LOAD_VERBOSE" ]] && { printf " - %s\n" "$(basename "$module")"  >&2; }
+
+        [[ -e "$module" ]] && source "$module"
+    done
+}
+
+[[ -n "$BOBASH_LOAD_VERBOSE" ]] && { echo "-- Loading lib packages ----------------------------------------" >&2; }
+
+bobash_load_packages "$BOBASH_DIR/lib/"
+
+[[ -n "$BOBASH_LOAD_VERBOSE" ]] && { echo "-- Loading sys packages ----------------------------------------" >&2; }
+
+declare bobash_sys_modules=(
+    "$BOBASH_DIR/sys/path.in"
+    "$BOBASH_DIR/sys/path-add.in"
+    "$BOBASH_DIR/sys/config.in"
+    "$BOBASH_DIR/sys/colors.in"
+    "$BOBASH_DIR/sys/locale.in"
+    "$BOBASH_DIR/sys/distro.in"
+    "$BOBASH_DIR/sys/cdpath.in"
+    "$BOBASH_DIR/sys/cdpath-add.in"
+)
+
+bobash_load_files "${bobash_sys_modules[@]}"
+
+# Interactive shell
+[[ -n $BOBASH_INTERACTIVE ]] && {
+    bobash_sys_modules=(
+        "$BOBASH_DIR/sys/module.in"
+        "$BOBASH_DIR/sys/lang.in"
+        "$BOBASH_DIR/sys/complete.in"
+        "$BOBASH_DIR/sys/prompt.in"
+        "$BOBASH_DIR/sys/history.in"
+        "$BOBASH_DIR/sys/motd.in"
+    )
+
+    bobash_load_files "${bobash_sys_modules[@]}"
+
+    if ! awk --version |& grep 'GNU Awk' -q; then
+        bobash_load_packages "$BOBASH_DIR/os/"
+
+        inst-utils-min
+        bash-info
+    fi
+}
+
+# Modules
+declare -a packages
+
+packages=()
+
+[[ -n "$BOBASH_LOAD_VERBOSE" ]] && { echo "-- Loading packages ----------------------------------------" >&2 ; }
+
+[[ -n $BOBASH_INTERACTIVE ]] && {
+    packages+=("$BOBASH_DIR/ext/")
+    packages+=("$BOBASH_DIR/os/")
+    packages+=("$BOBASH_DIR/pack/"*)
+    packages+=("$BOBASH_DIR/host/")
+}
+
+bobash_load_packages "${packages[@]}"
+
+[[ -n $BOBASH_INTERACTIVE ]] && {
+    source "$BOBASH_DIR/sys/alias.in"
+}

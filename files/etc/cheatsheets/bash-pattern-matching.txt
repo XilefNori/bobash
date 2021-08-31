@@ -1,0 +1,101 @@
+http://wiki.bash-hackers.org/syntax/pattern
+
+A pattern is a string description. Bash can use it in various situations:
+
+Pathname expansion (Globbing - matching filenames)
+Pattern matching in conditional expressions
+Substring removal and search and replace in Parameter Expansion
+Pattern-based branching using the case command
+The pattern description language is relatively easy. Any character that's not mentioned below matches itself. The NUL character may not occur in a pattern. If special characters are quoted, they're matched literally without their special meaning.
+
+== Normal pattern language ==
+
+Sequence  Description
+
+*	      Matches any string, including the null string (empty string)
+?	      Matches any single character
+X	      Matches the character X which can be any character that has no special meaning
+\X	      Matches the character X, where the character's special meaning is taken away using the backslash
+\\	      Matches a backslash
+[…]	      Defines a pattern bracket expression (see below). Matches any of the enclosed characters at this position.
+
+-- Bracket expressions --
+
+The bracket expression […] mentioned above has some useful specialities:
+
+Bracket expression	Description
+
+[XYZ]	            The "normal" bracket expression, matching either X, Y or Z
+[X-Z]	            A range expression: Matching all the characters from X to Y (whatever that means in your current locale, it depends how the characters are sorted!)
+[[:class:]]	        Matches all the characters defined by a POSIX® character class: alnum, alpha, ascii, blank, cntrl, digit, graph, lower, print, punct, space, upper, word and xdigit
+[^…]	            A negating expression: It matches all the characters that are not in the bracket expression
+[!…]	            Equivalent to [^…]
+[]...] or [-…]	    Used to include the characters ] and - into the set, they need to be the first characters after the opening bracket
+[=C=]	            Matches any character that is eqivalent to the collation weight of C (current locale!)
+[[.SYMBOL.]]	    Matches the collating symbol SYMBOL
+
+-- Examples --
+
+Some simple examples using normal pattern matching:
+
+Pattern "Hello world" matches
+Hello world
+
+Pattern [Hh]"ello world" matches
+=> Hello world
+=> hello world
+
+Pattern Hello* matches (for example)
+=> Hello world
+=> Helloworld
+=> HelloWoRlD
+=> Hello
+
+Pattern Hello world[[:punct:]] matches (for example)
+=> Hello world!
+=> Hello world.
+=> Hello world+
+=> Hello world?
+
+Pattern [[.backslash.]]Hello[[.vertical-line.]]world[[.exclamation-mark.]] matches (using collation sybols)
+=> \Hello|world!
+
+== Extended pattern language ==
+
+If you set the shell option extglob, Bash understands some more powerful patterns. Here, a <PATTERN-LIST> is one or more pattern, separated by the pipe-symbol (|).
+
+?(<PATTERN-LIST>)	Matches zero or one occurrence of the given patterns
+*(<PATTERN-LIST>)	Matches zero or more occurrences of the given patterns
++(<PATTERN-LIST>)	Matches one or more occurrences of the given patterns
+@(<PATTERN-LIST>)	Matches one of the given patterns
+!(<PATTERN-LIST>)	Matches anything except one of the given patterns
+
+-- Examples --
+
+Delete all but one specific file
+
+rm -f !(survivior.txt)
+
+== Pattern matching configuration ==
+
+Related shell options
+
+Option	         Classification	          Description
+
+dotglob	         globbing	              see Pathname expansion customization
+extglob	         global	                  enable/disable extended pattern matching language, as described above
+failglob	     globbing	              see Pathname expansion customization
+nocaseglob	     globbing	              see Pathname expansion customization
+nocasematch	     pattern/string matching  perform pattern matching without regarding the case of individual letters
+nullglob	     globbing	    	      see Pathname expansion customization
+globasciiranges	 globbing	              see Pathname expansion customization
+
+=== Bugs and Portability considerations ===
+
+* Counter-intuitively, only the [!chars] syntax for negating a character class is specified by POSIX for shell pattern matching. [^chars] is merely a commonly-supported extension. Even dash supports [^chars], but not posh.
+
+* All of the extglob quantifiers supported by bash were supported by ksh88. The set of extglob quantifiers supported by ksh88 are identical to those supported by Bash, mksh, ksh93, and zsh.
+
+* mksh does not support POSIX character classes. Therefore, character ranges like [0-9] are somewhat more portable an equivalent POSIX class like [:digit:].
+
+* Bash uses a custom runtime interpreter for pattern matching. (at least) ksh93 and zsh translate patterns into regexes and then use a regex compiler to emit and cache optimized pattern matching code. This means Bash may be an order of magnitude or more slower in cases that involve complex back-tracking (usually that means extglob quantifier nesting). You may wish to use Bash's regex support (the =~ operator) if performance is a problem, because Bash will go through your C library regex implementation rather than using its own pattern matcher.

@@ -1,0 +1,43 @@
+ssh-key-copy() {
+    # cat ~/.ssh/id_rsa.pub | ssh user@machine "mkdir ~/.ssh; cat >> ~/.ssh/authorized_keys"
+    cat ~/.ssh/id_rsa.pub | ssh "$@" "mkdir ~/.ssh; cat >> ~/.ssh/authorized_keys"
+}
+complete -o default -o nospace -F _complete_ssh_hosts ssh-key-copy
+
+ssh-key-cat() {
+    declare da_keys=~/.ssh/keys
+
+    if [[ "$#" == 0 ]]; then
+        find "$da_keys/" -name '*.pub' -printf '%f\n' | sort
+
+        return
+    fi
+
+    cat "$da_keys/$1"
+}
+
+complete -F _complete-cmd ssh-key-cat
+
+ssh-key-agent() {
+    ssh-add -l -E md5
+}
+
+ssh-key-fingerprint() {
+    declare da_keys=~/.ssh/keys
+
+    if [[ "$#" == 0 ]]; then
+        find "$da_keys/" -name '*.pub' -printf '%f\n' | sed -r 's/\.pub$//' | sort |
+            while read line; do
+                for i in {0..1}; do
+                    echo "$line";
+                    echo "$line.pub";
+                done;
+            done
+
+        return
+    fi
+
+    ssh-keygen -l -E md5 -f "$da_keys/$1"
+}
+
+complete -F _complete-cmd ssh-key-fingerprint

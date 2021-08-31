@@ -1,0 +1,3 @@
+[[ ! -d "$HOME/bin" ]] && mkdir -p "$HOME/bin"
+
+path-readd "$HOME/bin"

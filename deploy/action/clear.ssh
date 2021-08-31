@@ -1,0 +1,2 @@
+cd ~
+rm -f .bash_history

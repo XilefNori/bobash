@@ -1,0 +1,50 @@
+home-switch() {
+    [[ -z $I_AM_USER ]] && { echo "Cannot $FUNCNAME. You are not regular user"; return 1; }
+
+    declare quite
+    # -- Arguments --
+    declare flags="q" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+       if getopts "$flags" flag; then case $flag in
+            q) quite=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare da_home=$(user-home)
+
+    [[ $da_home = $HOME ]] && { echo "Dirs $da_home = $HOME equal!"; return 1; }
+    [[ -L "$da_home"    ]] && {
+        [[ -z $quite ]] && {
+            echo "Link $da_home -> $(readlink -f "$da_home") exist!"
+            ls -ld "$da_home" "$da_home.saved"
+        }
+
+        return
+    };
+
+    ! simple_ask "Switch home dir $da_home -> $HOME ?" && { echo "Aborted"; return 1; }
+
+    sudo mv -f "$da_home" "$da_home.saved"
+    sudo ln -s "$HOME" "$da_home"
+
+    ls -ld "$da_home" "$da_home.saved"
+}
+
+home-restore() {
+    [[ -z $I_AM_USER ]] && { echo "Cannot $FUNCNAME. You are not regular user"; return 1; }
+
+    declare da_home=$(user-home)
+
+    [[ ! -L "$da_home" ]]       && { echo "Path $da_home is not link!"   ; ls -ld "$da_home"; return; };
+    [[ ! -d "$da_home.saved" ]] && { echo "Dir $da_home.saved not exist!"; ls -ld "$da_home"; return 1; };
+
+    ! simple_ask "Restore home dir $HOME -> $da_home ?" && { echo "Aborted"; return 1; }
+
+    sudo rm -f $da_home
+    sudo mv -f "$da_home.saved" "$da_home"
+
+    ls -ld "$da_home"
+}

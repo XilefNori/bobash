@@ -1,0 +1,8 @@
+# Make xyz complete needed filesnames
+
+_xyz()
+{
+	declare IFS=$'\n' # if skip spaces
+	COMPREPLY=( $( compgen -o plusdirs  -f -X '!*.@(pgsql|sql)' -- ${COMP_WORDS[COMP_CWORD]} ) )
+}
+complete -o filenames -F _xyz xyz

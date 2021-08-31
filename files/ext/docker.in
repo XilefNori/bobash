@@ -1,0 +1,843 @@
+# DOCKER_SQL_SERVER_CONTAINER
+
+DOCKER_DIR=~/.bobash/config/docker
+
+DOCKER_DIR_DUMP=~/sql/dump
+
+DOCKER_CACHE_XDEBUG=300
+DOCKER_CACHE_OS=2400
+
+docker-list-container() {
+    declare -a docker_opts
+    declare verbose cache
+    # -- Arguments --
+    declare flags="avC" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=1 ;;
+            a) docker_opts+=(--all) ;;
+            C) cache=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    [[ -n $verbose ]] && echo "docker ps  ${docker_opts[@]}  --format '{{.Names}}'" >&2
+                               docker ps "${docker_opts[@]}" --format "{{.Names}}"
+}
+
+docker-add-bash() {
+    declare container_id="$1"
+
+cat << 'E' | docker exec -i -u root "$container_id" sh
+    distro="$(cat /etc/*-release | grep '^ID=' | sed 's/ID=//')"
+    echo "distro: $distro"
+    echo "whoami: $(whoami)"
+
+    case $distro in
+        alpine       ) apk add --no-cache bash;;
+        ubuntu|debian) apt-get install bash;;
+                    *) echo "Unkwown distro" ;;
+    esac
+E
+}
+
+docker-is-running() {
+    docker info |& grep 'docker daemon running'
+    [[ ${PIPESTATUS[1]} -ne 0 ]]
+}
+
+docker-enter() {
+    declare -a docker_opts bash_opts
+    declare shell
+
+    # -- Arguments --
+    declare flags="u:h:svH" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=1 ;;
+            u) docker_opts+=(-u "${OPTARG}") ;;
+            s) shell=1 ;;
+            H) bash_opts+=(-c "HOME='$KUBE_POD_HOME' bash") ;;
+            h) bash_opts+=(-c "HOME='${OPTARG}' bash") ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare container_id="${params[0]}"
+
+    declare intepreter
+    [[ -n $shell ]] && intepreter=sh || intepreter=bash
+
+    [[ -n $verbose ]] && echo "docker exec -it  ${docker_opts[@]}  '$container_id' $intepreter  ${bash_opts[@]}" >&2
+                               docker exec -it "${docker_opts[@]}" "$container_id" $intepreter "${bash_opts[@]}"
+
+}
+
+_docker-container-os() {
+    echo "cat /etc/*-release | grep PRETTY_NAME= | sed 's/PRETTY_NAME=//; s:\"::g'" | docker-exec -s "$1" 2> /dev/null
+}
+
+docker-list-container-os() {
+    list-x "$FUNCNAME" 'docker-list-container' '_docker-container-os' -c "$DOCKER_CACHE_OS" "$@"
+}
+
+docker-os() { docker-list-container-os "$@"; }
+
+_docker-xdebug-id() { docker-list-container | grep -- '-php'; }
+_docker-xdebug-val() {
+    declare container_id="$1"
+
+    declare error
+    declare xdebug=$(docker-env "$container_id" XDEBUG_CONFIG -sv 2> /dev/null) 2> /dev/null || error=1
+
+    if [[ -z $full ]]; then
+        [[ -n $xdebug ]] && xdebug=on || xdebug=off
+    fi
+
+    [[ -n $error ]] && xdebug='<error>'
+
+    echo "$xdebug"
+}
+
+docker-list-xdebug() {
+    list-x "$FUNCNAME" _docker-xdebug-id _docker-xdebug-val -c "$DOCKER_CACHE_XDEBUG" "$@"
+}
+
+docker-xdebug() { docker-list-xdebug "$@"; }
+
+docker-exec() {
+    declare cmd verbose user shell
+
+    # -- Arguments --
+    declare flags="vu:c:s" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            u) user="${OPTARG}" ;;
+            s) shell=1 ;;
+            c) cmd="${OPTARG}" ;;
+            v) verbose=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare bash_opts
+    [[ -n $verbose ]]  && bash_opts+=('-x')
+
+    declare docker_opts=(-i)
+    [[ -n $user ]] && docker_opts+=(-u "$user")
+
+
+
+    declare intepreter
+    [[ -n $shell ]] && intepreter=sh || intepreter=bash
+
+    if [[ "${#params[@]}" -eq 0 ]]; then
+        echo "No containers is set!" >&2
+        return 1
+    fi
+
+    declare res
+
+    if [[ "${#params[@]}" -gt 1 ]]; then
+        declare fa_script_tmp=$(mktemp)
+        { [[ -n $cmd ]] && echo "$cmd" || cat; } > "$fa_script_tmp"
+
+        if [[ -n $verbose ]]; then
+            echo '-- SCRIPT -----------------------------------'
+            cat "$fa_script_tmp"
+            echo '---------------------------------------------'
+        fi
+
+
+        for container_id in "${params[@]}"; do
+            if [[ ${#params[@]} -gt 1 ]]; then
+                echo
+                echo "-- EXEC in [$container_id] --"
+                echo
+            fi
+
+
+            cat "$fa_script_tmp" | {
+                [[ -n $verbose ]] && echo "docker exec  ${docker_opts[@]}  '$container_id' $intepreter  ${bash_opts[@]}  -" >&2
+                                           docker exec "${docker_opts[@]}" "$container_id" $intepreter "${bash_opts[@]}" -
+
+                res=$?
+
+                [[ $res -ne 0 ]] && break
+            }
+        done
+
+        rm -f "$fa_script_tmp"
+
+        return $res
+    fi
+
+    declare container_id="${params[0]}"
+
+    [[ -n $verbose ]] && echo "docker exec  ${docker_opts[@]}  '$container_id' $intepreter  ${bash_opts[@]}  -" >&2
+                               docker exec "${docker_opts[@]}" "$container_id" $intepreter "${bash_opts[@]}" -
+}
+
+docker-cp() {
+    declare -a input
+    declare from quite verbose
+
+    # -- Arguments --
+    declare flags="fqv" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            f) from=1 ;;
+            q) quite=1 ;;
+            v) verbose=$((verbose+1)) ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare container="${params[0]}"
+    declare localFile="${params[1]}"
+    declare containerFile="${params[2]}"
+
+    [[ -z $localFile ]] && { echo "usage: $FUNCNAME container localFile [containerFile]" >&2; return 1; }
+
+    [[ -z $containerFile ]] && containerFile="/tmp/$(basename "$localFile")"
+
+    if [[ -n $from ]]; then
+        [[ -z $quite ]] && echo docker cp "$container:$containerFile" "$localFile"
+                                docker cp "$container:$containerFile" "$localFile"
+
+        [[ -z $quite ]] && ls -l "$localFile"
+    else
+        [[ ! -f $localFile ]] && { echo "Local file [$localFile] not exists!" >&2; return 1; }
+
+        [[ -z $quite ]] && echo docker cp "$localFile" "$container:$containerFile"
+                                docker cp "$localFile" "$container:$containerFile"
+    fi
+}
+
+docker-env() {
+    declare values cache names user strict
+    # -- Arguments --
+    declare flags="OACSsvnu:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            u) user="${OPTARG}" ;;
+            v) values=1 ;;
+            n) names=1 ;;
+            S) strict=1 ;;
+            s) shell=1 ;;
+            C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare -a docker_opts
+    [[ -n $user  ]] && docker_opts+=(-u "$user")
+    [[ -n $shell ]] && docker_opts+=(-s)
+
+    declare container="${params[0]}"
+    declare name="${params[1]}"
+
+    echo "env" | docker-exec "$container" "${docker_opts[@]}" 2> /dev/null | {
+        if [[ -n $name ]]; then
+            declare mask="^$name[^=]*="
+
+            if [[ $strict -gt 0 ]]; then
+                mask="^$name="
+            fi
+
+            grep -P "$mask" | sort | {
+                if [[ -n $values ]]; then
+                    sed -r "s:$mask::"
+                else
+                    cat
+                fi
+            }
+        elif [[ -n $names ]]; then
+            sed -r 's:^(\w+)=.*:\1:'
+        else
+            cat
+        fi
+    }
+}
+
+_docker-env() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare pod="${COMP_WORDS[1]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare opts="$(docker-list-container -C)";
+
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0
+    fi
+
+    declare opts="$(docker-env "$pod" -Cn)";
+    COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+
+    return 0
+}
+
+complete -F _docker-env docker-env
+
+docker-psql-db-drop-create() {
+    declare db tmp_db
+    declare psql_opts=()
+
+    # -- Arguments --
+    declare flags=":td:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            t) tmp_db=1 ;;
+            d) db="${OPTARG}" ;;
+
+            :) [[ -n ${OPTARG} ]] && psql_opts+=("-${OPTARG}")   ;;
+            ?) [[ -n ${OPTARG} ]] && psql_opts+=("-${OPTARG}")   ;;
+            *) echo "Unexpected: ${flag} ${OPTARG} ${OPTIND}"; return 1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare container="${params[0]}"
+
+    [[ -z $db ]] && {
+        declare database_url
+                database_url="$(docker-env "$container" DATABASE_URL -v)" || return 1
+        declare database=($(parse-url "$database_url" rpath))
+
+        db="${database[0]}"
+        [[ -n $tmp_db ]] && db="tmp_$db"
+    }
+
+    cat << EOL | docker-psql "$container" "${psql_opts[@]}" -D
+    DROP DATABASE IF EXISTS "$db";
+    CREATE DATABASE "$db";
+EOL
+}
+
+docker-pdump() {
+    [[ -z $DOCKER_SQL_SERVER_CONTAINER ]] && { echo 'You must set DOCKER_SQL_SERVER_CONTAINER environment variable' >&2; return 1; }
+    [[ -z $DOCKER_DIR_DUMP             ]] && { echo 'You must set DOCKER_DIR_DUMP environment variable' >&2; return 1; }
+
+    [[ ! -d $DOCKER_DIR_DUMP ]] && {
+        mkdir -p "$DOCKER_DIR_DUMP" || { echo 'Cannot create DOCKER_DIR_DUMP=[$DOCKER_DIR_DUMP] dir!'; return 1;}
+    }
+
+    declare verbose quite
+
+    # -- Arguments --
+    declare flags="OAvq" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            v) verbose=1 ;;
+            q) quite=1
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare container="${params[0]}"
+
+    declare database_url
+            database_url="$(docker-env "$container" DATABASE_URL -v)" || return 1
+    declare database=($(parse-url "$database_url" user host port rpath))
+
+    declare user=${database[0]%:*}
+    declare pass=${database[0]##*:}
+    declare host=${database[1]}
+    declare port=${database[2]}
+    declare db=${database[3]}
+
+    declare day="$(date +%F)"
+    declare fa_container_dump="/tmp/$db-dump-$day.pgsql"
+    declare fa_local_dump="$DOCKER_DIR_DUMP/container-$container-db-$db-dump-$day.pgsql"
+
+    if [[ -n $verbose ]]; then
+       echo "PGPASSWORD='$pass' pg_dump -U '$user' -h '$host' -p '$port' '$db' > '$fa_container_dump'" >&2
+    fi
+
+    echo "PGPASSWORD='$pass' pg_dump -U '$user' -h '$host' -p '$port' '$db' > '$fa_container_dump'" | docker-exec "$DOCKER_SQL_SERVER_CONTAINER"
+    docker-cp -f "$DOCKER_SQL_SERVER_CONTAINER" "$fa_container_dump" "$fa_local_dump"
+    echo "rm -f '$fa_container_dump'" | docker-exec "$DOCKER_SQL_SERVER_CONTAINER"
+
+    echo "$fa_local_dump"
+}
+complete -F _docker-list-container docker-pdump
+
+
+docker-pdump-apply() {
+    declare db
+    declare psql_opts=() psql_opts_drop_create=()
+
+    # -- Arguments --
+    declare flags=":d:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            d) psql_opts+=(-d "${OPTARG}") ;;
+
+            :) [[ -n ${OPTARG} ]] && psql_opts+=("-${OPTARG}")   ;;
+            ?) [[ -n ${OPTARG} ]] && psql_opts+=("-${OPTARG}")   ;;
+            *) echo "Unexpected: ${flag} ${OPTARG} ${OPTIND}"; return 1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare container="${params[0]}"
+    declare fa_dump="${params[1]}"
+
+    docker-psql-db-drop-create "$container" "${psql_opts[@]}"
+    docker-psql                "$container" "${psql_opts[@]}" -f "$fa_dump"
+}
+
+docker-psql() {
+    [[ -z $DOCKER_SQL_SERVER_CONTAINER ]] && { echo 'You must set DOCKER_SQL_SERVER_CONTAINER environment variable' >&2; return 1; }
+
+    declare -a input
+    declare verbose fa_script sql quite info
+
+    declare db no_db tmp_db cat
+
+    # -- Arguments --
+    declare flags="vqitf:s:d:D" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=1 ;;
+            q) quite=1 ;;
+            i) info=1 ;;
+            t) tmp_db=1 ;;
+
+            f) fa_script="${OPTARG}" ;;
+            c) cat=1 ;;
+            s) sql="${OPTARG}" ;;
+            d) db="${OPTARG}" ;;
+            D) no_db=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare container="${params[0]}"
+    declare item="${params[1]}"
+
+    declare tmp_script=0
+
+    if [[ -n $item && -z $sql && -z $fa_script ]]; then
+        if [[ -f $item ]]; then
+            fa_script="$item"
+        else
+            sql="$item"
+        fi
+    fi
+
+    [[ -n $sql ]] && input=("$sql")
+
+    if [[ -z $fa_script && -z $input ]]; then
+        fa_script="$(mktemp)"
+        tmp_script=1
+
+        cat > "$fa_script"
+    fi
+
+    declare database_url
+            database_url="$(docker-env "$container" DATABASE_URL -v)" || return 1
+    declare database=($(parse-url "$database_url" user host port rpath))
+
+    declare user=${database[0]%:*}
+    declare pass=${database[0]##*:}
+    declare host=${database[1]}
+    declare port=${database[2]}
+
+    [[ -z $db ]] && {
+        db=${database[3]}
+        [[ -n $tmp_db ]] && db="tmp_$db"
+    }
+
+    declare psql_opts=()
+
+    if [[ -z $no_db ]]; then
+        psql_opts+=(-d "'$db'")
+    fi
+
+    {
+        echo "[$DOCKER_SQL_SERVER_CONTAINER]: $user:xxx@$host:$port/$db"
+        echo
+    } >&2
+
+    if [[ -n $fa_script ]]; then
+        declare fa_container_script="/tmp/$(basename "$fa_script")"
+
+        [[ -z $quite ]] && {
+            echo "Will execute [$fa_script]"
+            cat "$fa_script"
+            echo
+
+            read -n 1 -p "Press any key..."
+            echo
+        }
+
+        declare docker_cp_opts=()
+        [[ -n $quite ]] && docker_cp_opts+=(-q)
+
+        docker-cp "${docker_cp_opts[@]}" "$DOCKER_SQL_SERVER_CONTAINER" "$fa_script" "$fa_container_script" || {
+            echo "Could not copy script [$fa_script] -> container [$container:$fa_container_script]" >&2
+
+            [[ $tmp_script -gt 0 ]] && rm -f "$fa_script"
+
+            return 1
+        }
+
+        [[ $tmp_script -gt 0 ]] && rm -f "$fa_script"
+
+        if [[ -n $info ]]; then
+           echo "PGPASSWORD='$pass' psql -U '$user' -h '$host' -p $port ${psql_opts[*]} -f '$fa_container_script'" >&2
+
+           return
+        fi
+
+        echo "PGPASSWORD='$pass' psql -U '$user' -h '$host' -p '$port' ${psql_opts[*]} -f '$fa_container_script'" |
+            docker-exec "$DOCKER_SQL_SERVER_CONTAINER" |
+                if [[ -n $cat ]]; then cat; else less -FXS; fi
+    else
+        if [[ -n $info ]]; then
+           echo "PGPASSWORD='$pass' psql -U '$user' -h '$host' -p '$port' ${psql_opts[*]} -c \"${input[*]}\"" >&2
+
+           return
+        fi
+
+        echo "PGPASSWORD='$pass' psql -U '$user' -h '$host' -p '$port' ${psql_opts[*]} -c \"${input[*]}\"" |
+            docker-exec "$DOCKER_SQL_SERVER_CONTAINER" |
+                if [[ -n $cat ]]; then cat; else less -FXS; fi
+    fi
+}
+
+
+_docker-psql() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare cmd="${COMP_WORDS[1]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare opts="$(docker-list-container -C)";
+
+        COMPREPLY=( $( compgen -W "${opts}" -- "${cur}" ) )
+        return 0
+    fi
+
+    declare IFS=$'\n'
+    COMPREPLY=( $( compgen -o plusdirs  -f -X '!*.@(pgsql|sql)' -- $cur ) )
+
+    # COMPREPLY=( $( compgen -o plusdirs -o filenames -A file -X '!*.@(pgsql|sql)' -- "$cur" ) )
+    return 0
+}
+
+complete -o filenames -F _docker-psql docker-psql docker-pdump-apply
+
+
+_docker-list-container() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare list=($(docker-list-container -C))
+
+    COMPREPLY=($( compgen -W "${list[*]}" -- "${cur}" ));
+    return 0
+}
+
+complete -F _docker-list-container docker-exec docker-enter docker-stop-all docker-kill-all
+complete -F _docker-list-container docker-add-bash docker-pdump docker-psql-db-drop-create
+
+
+_docker-container-files() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare cmd="${COMP_WORDS[1]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare opts="$(docker-list-container -C)";
+
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0
+    fi
+
+    COMPREPLY=( $( compgen -o filenames -A file -- "$cur" ) )
+    return 0
+}
+
+complete -F _docker-container-files docker-cp
+
+
+docker-service-restart() {
+    sudo systemctl restart docker.service
+    # sudo service docker restart
+}
+
+docker-service-status() {
+    sudo systemctl status docker
+}
+
+docker-clear-dangling() {
+    echo "-- Containers cleanup: removing exited containers --"
+    docker rm -v $(docker ps -a -q -f status=exited)
+
+    echo "-- Images cleanup: removing dangling containers --"
+    docker rmi $(docker images -f "dangling=true" -q)
+
+    echo "-- Volumes cleanup: removing dangling volumes --"
+    docker volume rm $(docker volume ls -qf dangling=true)
+}
+
+docker-prune-all() {
+    docker system prune -a -f
+}
+
+docker-prune() {
+    declare yes
+
+    # -- Arguments --
+    declare flags="y" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            y) yes=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare objects=("${params[@]}")
+
+    for object in "${objects[@]}"; do
+        echo "-- Prune $object ---------------------"
+        [[ -n $yes ]] && { yes | docker $object prune; } ||
+                         {       docker $object prune; }
+        echo
+    done
+}
+
+docker-clear    () { docker-prune "$@"; }
+docker-clear-all() { docker-prune-all "$@"; }
+
+_docker-prune() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare list=(container image network volume)
+
+    COMPREPLY=($( compgen -W "${list[*]}" -- "${cur}" ));
+    return 0
+}
+
+complete -F _docker-prune docker-prune docker-clear
+
+docker-ps() {
+    declare no_table no_count format debug
+
+    # -- Arguments --
+    # declare flags=":vidmcarpsSnLMNTCO" OPTIND=1
+
+    declare -a docker_opts sort_opts grep
+
+    declare flags=":viTCOk:rg:dE" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+
+            v) format="{{.Names}}\t{{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" ;;
+            i) format="{{.Names}}\t{{.Image}}\t{{.Ports}}" ;;
+
+            # S) format="$format\t{{.Size}}"              ;;
+            # d) format="$format\t{{.ID}}"                ;;
+            # m) format="$format\t{{.Image}}"             ;;
+            # c) format="$format\t{{.Command}}"           ;;
+            # a) format="$format\t{{.CreatedAt}}"         ;;
+            # r) format="$format\t{{.RunningFor}}"        ;;
+            # p) format="$format\t{{.Ports}}"             ;;
+            # s) format="$format\t{{.Status}}"            ;;
+            # n) format="$format\t{{.Names}}"             ;;
+            # L) format="$format\t{{.Labels}}"            ;;
+            # M) format="$format\t{{.Mounts}}"            ;;
+            # N) format="$format\t{{.Networks}}"          ;;
+
+            k) sort_opts+=(-k "${OPTARG}") ;;
+            r) sort_opts+=(-r)             ;;
+            g) grep="${OPTARG}" ;;
+            d) debug="1" ;;
+            E) docker_opts+=(-f status=exited) ;;
+
+            T) no_table=1 ;;
+            C) no_count=1 ;;
+
+            :) [[ -n ${OPTARG} ]] && docker_opts+=("-${OPTARG}")   ;;
+            ?) [[ -n ${OPTARG} ]] && docker_opts+=("-${OPTARG}")   ;;
+            *) echo "Unexpected: ${flag} ${OPTARG} ${OPTIND}" ;;
+        esac; else
+            docker_opts+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    if [[ -z $format ]]; then
+        format="{{.Names}}\t{{.Image}}\t{{.Ports}}"
+    fi
+
+    if ! echo $format | grep -F '{{.Names}}' -q; then
+        format="{{.Names}}\t$format"
+    fi
+
+    if [[ -n $no_table ]]; then
+        no_count=1
+    else
+        format="table $format"
+    fi
+
+    declare dlm=$'\t'
+
+    {
+        {
+            [[ -n $debug ]] && echo "docker ps ${docker_opts[@]} --format \"$format\" | tail -n+2 | sort ${sort_opts[@]}" >&2
+
+            docker ps "${docker_opts[@]}" --format "$format" | head -n 1
+            docker ps "${docker_opts[@]}" --format "$format" | tail -n+2 | {
+                if [[ -n $grep ]]; then grep -P "$grep"; else cat; fi
+            } | sort "${sort_opts[@]}"
+        } | column -s "$dlm" -t
+
+        [[ -z $no_count ]] && {
+            echo
+            echo "Total count: $(docker ps "${docker_opts[@]}" --format "$format" | tail -n+2 | {
+                if [[ -n $grep ]]; then grep -P "$grep"; else cat; fi
+            } | wc -l)"
+        }
+    } | less -SFX
+}
+
+_docker-ps() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    COMPREPLY=()
+
+    declare opts
+
+    if [[ "${cur:0:1}" == '-' ]]; then
+        opts="$(docker-ps -O)";
+
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+    fi
+
+    return 0
+}
+
+complete -F _docker-ps docker-ps
+
+
+export DOCKER_C_FORMAT_ONE="\nID\t{{.ID}}\nIMAGE\t{{.Image}}\nCOMMAND\t{{.Command}}\nCREATED\t{{.RunningFor}}\nSTATUS\t{{.Status}}\nPORTS\t{{.Ports}}\nNAMES\t{{.Names}}\nMOUNTS\t{{.Mounts}}\n"
+
+docker-ps-last() {
+    docker ps -l --format "$DOCKER_C_FORMAT_ONE"
+}
+
+
+docker-stop-all() {
+    declare all list
+
+    # -- Arguments --
+    declare flags="dl" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            l) list=1 ;;
+            d) list=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare mask="${params[0]}"
+    if [[ -n $mask ]]; then
+        docker-list-container | grep -P "$mask" | {
+            if [[ -n $list ]]; then
+                cat
+            else
+                xargs docker stop
+            fi
+        }
+    else
+        if [[ -n $list ]]; then
+            docker-list-container
+        else
+            docker ps -q | xargs docker stop
+        fi
+    fi
+}
+
+docker-kill-all() {
+    declare all list
+
+    # -- Arguments --
+    declare flags="dl" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            l) list=1 ;;
+            d) list=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare mask="${params[0]}"
+    if [[ -n $mask ]]; then
+        docker-list-container | grep -P "$mask" | {
+            if [[ -n $list ]]; then
+                cat
+            else
+                xargs docker kill
+            fi
+        }
+    else
+        if [[ -n $list ]]; then
+            docker-list-container
+        else
+            docker ps -q | xargs docker kill
+        fi
+    fi
+
+}
+
+# ----------------------------------------------------------------------------------
+
+docker-cfg()  {  var-cfg "DOCKER" "$@"; }
+_docker-cfg() { _var-cfg "docker-cfg"     ; }
+complete -F _docker-cfg docker-cfg
+
+ dcrk() { wrapper-help-command  docker docker "$@" ; }
+_dcrk() { _wrapper-complete     docker _docker     ; }
+complete -o filenames -F _dcrk dcrk
+
+ docker-complete() {  wrapper-complete-cmd  docker "$@" ; }
+_docker-complete() { _wrapper-complete-cmd  docker      ; }
+complete -F _docker-complete docker-complete
+

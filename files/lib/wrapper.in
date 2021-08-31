@@ -1,0 +1,353 @@
+WRAPPER_DIR=~/.bobash/config/wrapper
+WRAPPER_CACHE_COMMAND_LIST=3600
+WRAPPER_DEBUG=0
+WRAPPER_DLM=-
+WRAPPER_HELP=-?
+WRAPPER_CODE=-??
+
+complete -u w
+
+wrapper() { wrapper-help       wrapper "$@"; }
+_wrapper() { _wrapper-complete  wrapper     ; }
+complete -F _wrapper wrapper
+
+wrapper-cfg()  {  var-cfg "WRAPPER" "$@"; }
+_wrapper-cfg() { _var-cfg "wrapper-cfg" ; }
+complete -F _wrapper-cfg wrapper-cfg
+
+wrapper-cache-list()   { cache-list wrapper "$@"; }
+wrapper-cache-show()   { cache-show wrapper "$@"; }
+wrapper-cache-delete() { cache-delete wrapper "$@"; }
+
+_wrapper-cache-file() { _cache-file wrapper; }
+complete -F _wrapper-cache-file wrapper-cache-show wrapper-cache-delete
+
+wrapper-list-cmd() {
+    declare prefix="$1"
+
+    declare -F | sed 's/declare -f //' | grep -P "^${prefix}" | sed -e "s~${prefix}~~"
+}
+
+wrapper-simple-command() {
+    declare prefix="$1${WRAPPER_DLM}"
+    declare command="$2"
+    shift 2
+
+    declare cmd=$1
+    [[ -z $cmd ]] && { command $command; }
+
+    [[ $WRAPPER_DEBUG -gt 0 ]] && echo "wrapper-list-cmd \"$prefix\" | grep -P \"^$cmd$\" -q" >&2
+
+    if wrapper-list-cmd "$prefix" | grep -P "^$cmd$" -q; then
+        [[ $WRAPPER_DEBUG -gt 0 ]] && echo "${prefix}$1" "${@:2}" >&2
+
+        "${prefix}$1" "${@:2}"
+    else
+        if which $command >& /dev/null; then
+            [[ $WRAPPER_DEBUG -gt 0 ]] && echo "command $command \"${@}\"" >&2
+
+            command $command "${@}"
+        else
+            [[ $WRAPPER_DEBUG -gt 0 ]] && echo "$command \"${@}\"" >&2
+
+            $command "${@}"
+        fi
+    fi
+}
+
+wrapper-help-command() {
+    declare prefix="$1${WRAPPER_DLM}"
+    declare command="$2"
+    shift 2
+
+    declare cmd=$1
+    [[ -z $cmd ]] && {
+        if which $command >& /dev/null; then
+            command $command
+        else
+            $command
+        fi
+
+        return
+    }
+
+    if wrapper-list-cmd "$prefix" | grep -P "^$cmd$" -q; then
+        declare func help cmd p
+
+        cmd="$1"
+        func="${prefix}${cmd}"
+
+        for p in "${@:2}"; do
+            if [[ $p == "$WRAPPER_HELP" || $p == "$WRAPPER_CODE" ]]; then
+                {
+                    help="_${prefix}help-command-$cmd"
+
+                    if [[ $p == "$WRAPPER_HELP" ]] && declare -f "$help" > /dev/null && [[ $2 = help ]]; then
+                        $help
+                    else
+                        type "$func"
+                    fi
+
+                } | less -FX
+
+                return
+            fi
+        done
+
+        [[ $WRAPPER_DEBUG -gt 0 ]] && echo "${func}" "${@:2}" >&2
+
+        "${func}" "${@:2}"
+    else
+        if which $command >& /dev/null; then
+            [[ $WRAPPER_DEBUG -gt 0 ]] && echo "command $command \"${@}\"" >&2
+
+            command $command "${@}"
+        else
+            [[ $WRAPPER_DEBUG -gt 0 ]] && echo "$command \"${@}\"" >&2
+
+            $command "${@}"
+        fi
+    fi
+}
+
+wrapper-simple() {
+    declare prefix="$1${WRAPPER_DLM}"
+    shift 1
+
+    [[ -z $1 ]] && { wrapper-list-cmd "$prefix"; return; }
+
+    "${prefix}$1" "${@:2}"
+}
+
+wrapper-help() {
+    declare prefix="$1${WRAPPER_DLM}"
+    shift 1
+
+    [[ -z $1 ]] && { wrapper-list-cmd "$prefix"; return; }
+
+    declare func help cmd p
+
+    cmd="$1"
+    func="${prefix}${cmd}"
+
+    for p in "${@:2}"; do
+        if [[ $p == "$WRAPPER_HELP" || $p == "$WRAPPER_CODE" ]]; then
+            {
+                help="_${prefix}help-command-$cmd"
+                [[ $WRAPPER_DEBUG -eq 1 ]] && echo "$help" >&2
+
+                if [[ $p == "$WRAPPER_HELP" ]] && declare -f "$help" > /dev/null && [[ $2 = "$WRAPPER_HELP" ]]; then
+                    $help
+                else
+                    type "$func"
+                fi
+
+            } | less -FX
+
+            return
+        fi
+    done
+
+    "${func}" "${@:2}"
+}
+
+_wrapper-compreply() {
+    [[ $WRAPPER_DEBUG -eq 1 ]] && {
+        echo
+        echo "$FUNCNAME [$COMP_CWORD] ${COMP_WORDS[@]}"
+    } >&2
+
+    "$@"
+
+    declare i
+    for i in "${COMPREPLY[@]}"; do
+        echo "$i"
+    done
+
+    COMPREPLY=()
+}
+
+_wrapper-compreply-cached() {
+    declare func="$1"
+    declare name="$func"
+
+    declare i
+    for i in "${COMP_WORDS[@]:1}"; do
+        name="${name}-$i"
+    done
+
+    declare fa_cache
+            fa_cache="$(cache-file "$name" "wrapper")" || return 1
+
+    cached-cmd "$fa_cache" "_wrapper-compreply" "$func" -u "$WRAPPER_CACHE_COMMAND_LIST"
+}
+
+_wrapper-complete() {
+    declare cache=0
+    # -- Arguments --
+    declare flags="C" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+
+    declare prefix="${params[0]}"
+    declare prefix_cmd="${params[0]}${WRAPPER_DLM}"
+    declare primary_complete="${params[1]}"
+    declare primary_cmd_list="${params[2]}"
+
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    declare cmd="${COMP_WORDS[1]}"
+
+    if [[ $WRAPPER_DEBUG -eq 1 ]]; then
+        echo "$FUNCNAME [$COMP_CWORD] ${COMP_WORDS[@]}"
+    elif [[ $WRAPPER_DEBUG -gt 1 ]]; then
+        _debug_comp $FUNCNAME
+        echo "cache  : $cache"
+        echo "prefix : $prefix_cmd"
+        echo "primary: $primary_complete / $primary_cmd_list"
+    fi >&2
+
+    if [[ -n "$primary_complete" ]] && ! declare -f "$primary_complete" > /dev/null; then
+        echo "Primary complete [$primary_complete] function not exist!" >&2
+        return 1
+    fi
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        COMPREPLY=()
+
+        declare commands
+
+        if [[ -n $primary_cmd_list ]]; then
+            [[ $WRAPPER_DEBUG -gt 0 ]] && echo "run: $primary_cmd_list" >&2
+
+            COMPREPLY+=( $( compgen -W "$("$primary_cmd_list")" -- "${COMP_WORDS[COMP_CWORD]}") )
+        elif [[ -n $primary_complete ]]; then
+            if [[ $cache -gt 0 ]]; then
+                declare var="${prefix^^}";
+                        var="${var/-/_}";
+                        var="${var}_DIR";
+
+                declare fa_cache
+                if [[ -n ${!var} ]]; then
+                    fa_cache="$(cache-file "commands-list" "$prefix")" || return 1
+                else
+                    fa_cache="$(cache-file "${prefix}-commands-list" "wrapper")" || return 1
+                fi
+
+                commands="$( COMP_WORDS=("${COMP_WORDS[0]}"); cached-cmd "$fa_cache" "_wrapper-compreply" "$primary_complete" -u "$WRAPPER_CACHE_COMMAND_LIST")"
+
+                COMPREPLY+=( $( compgen -W "$commands" -- "${COMP_WORDS[COMP_CWORD]}") )
+             else
+                [[ $WRAPPER_DEBUG -gt 0 ]] && echo "run: $primary_complete" >&2
+
+                "$primary_complete"
+
+                # COMPREPLY+=($(_wrapper-compreply "$primary_complete"))
+             fi
+        fi
+
+        [[ '.' == "${cmd:0:1}" ]] && {
+            commands="$(wrapper-list-cmd "$prefix_cmd" | grep -P "^\.")";
+        } || {
+            commands="$(wrapper-list-cmd "$prefix_cmd" | grep -Pv "^\.")";
+        }
+
+        COMPREPLY+=( $( compgen -W "$commands" -- "$cur" ) )
+
+        return
+    fi
+
+    COMPREPLY=()
+
+    if ! wrapper-list-cmd "$prefix_cmd" | grep -P "^$cmd$" -q; then
+        if [[ -n $primary_complete ]]; then
+            [[ $WRAPPER_DEBUG -gt 0 ]] && echo "Delegate to [$primary_complete]" >&2
+
+            "$primary_complete"
+
+            return $?
+        else
+            echo "Unknown command $cmd" >&2
+
+            return 1
+        fi
+
+    fi
+
+    declare func="$prefix_cmd$cmd"
+
+    if [[ "${cur:0:1}" == '-' ]]; then
+        opts="$($func -O)";
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+
+        return
+    fi
+
+    declare complete="$(complete | grep -oP -- "(?<=-F ).+(?= $func\$)")"
+    if [[ -n $complete ]]; then
+        COMP_WORDS=("${COMP_WORDS[@]:1}")
+        COMP_CWORD=$((COMP_CWORD-1))
+
+        [[ $WRAPPER_DEBUG -gt 0 ]] && echo "Delegate to [$complete]" >&2
+
+        $complete
+
+        return
+    fi
+
+    return 0
+}
+
+wrapper-complete-cmd() {
+    declare prefix="$1${WRAPPER_DLM}"
+    shift
+
+    declare cmd=$1
+    declare func="${prefix}${cmd}"
+
+    declare complete="$(complete | grep -oP -- "(?<=-F ).+(?= $func\$)")"
+
+    [[ -z $complete ]] && { echo "No complete found for [$func]!" >&2; return 1; }
+
+    type $complete | less -FX
+}
+
+_wrapper-complete-cmd() {
+    declare wrapper="$1"
+
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+
+    [[ $WRAPPER_DEBUG -gt 0 ]] && {
+        echo
+        echo "$FUNCNAME [$COMP_CWORD] ${COMP_WORDS[@]}"
+        echo "wrapper: $wrapper"
+    } >&2
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare commands="$("$wrapper")";
+
+        COMPREPLY=( $( compgen -W "$commands" -- "$cur" ) )
+
+        return
+    fi
+}
+
+_debug_comp() {
+    [[ $WRAPPER_DEBUG -gt 0 ]] && {
+        echo  "$@" "[$COMP_CWORD] ${COMP_WORDS[@]}"
+        printf "%q\n" "$COMP_WORDBREAKS"
+        echo  "$COMP_TYPE/$COMP_POINT/$COMP_KEY"
+        echo  "$COMP_LINE"
+    } >&2
+}
+

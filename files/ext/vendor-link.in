@@ -1,0 +1,79 @@
+# VENDOR_DIR=<vendor source dir>
+# VENDOR_NAME=<vendor name>
+
+vendor-link() {
+    [[ $USYSTEM == 'mingw' ]] && { echo 'Use Cygwin! Mingw cannot run `cmd.exe /C command` mode' >&2; return 1; }
+	[[ -z $VENDOR_DIR      ]] && { echo "No global vendor dir [$VENDOR_DIR] is set!" >&2; return 1; }
+
+	declare da_root=$(git rev-parse --show-toplevel)
+	declare da_vendor="$da_root/vendor/$VENDOR_NAME"
+
+	[[ ! -d $da_vendor ]] && { echo "No vendor [$VENDOR_NAME] local dir!">&2; return 1; }
+
+    if [[ -z $1 ]]; then
+        find "$da_vendor" -mindepth 1 -maxdepth 1 -type d -printf "%f\n"
+
+        return
+    fi
+
+    declare package
+    declare link
+
+    for package in "$@"; do
+        declare da_lib="$VENDOR_DIR/$package"
+        declare da_cur="$da_vendor/$package"
+        declare da_saved="$da_root/.cache/$package"
+
+        [[ -d "$da_lib/src" ]] || { echo "No global vendor [$package] src dir [$da_lib/src]!"; return 1; }
+        [[ -e "$da_cur/src" ]] || { echo "No local  vendor [$package] src dir [$da_cur/src]!"; return 1; }
+
+        declare list=($(find "$da_cur" -mindepth 1 -maxdepth 1 -not -name vendor -not -name ".*" -not -type f -printf "%f\n"))
+
+        if [[ -z $link ]]; then
+            [[ -L "$da_cur/${list[0]}" ]] && link=0 || link=1
+        fi
+
+        [[ $link -eq 1 ]] && echo "Linking [$package] ..."
+        [[ $link -eq 0 ]] && echo "Unlinking [$package] ..."
+
+        declare dir
+        for dir in "${list[@]}"; do
+            [[   -L "$da_cur/$dir" && $link -eq 1 ]] && continue
+            [[ ! -L "$da_cur/$dir" && $link -eq 0 ]] && continue
+
+
+            if [[ -L "$da_cur/$dir" ]]; then
+                'rm' -f "$da_cur/$dir" &&
+                'mv' -f "$da_saved/$dir"  "$da_cur/$dir"
+            else
+                [[ ! -d "$da_saved" ]] && mkdir -p "$da_saved"
+
+                'rm' -rf "$da_saved/$dir"
+
+                'mv' -f "$da_cur/$dir" "$da_saved/$dir" &&
+
+                if type cmd.exe &> /dev/null; then
+                    cmd.exe /C mklink /J "$(cygpath -w "$da_cur/$dir")" "$(cygpath -w "$da_lib/$dir")"
+                else
+                    'ln' -s "$da_lib/$dir" "$da_cur/$dir"
+                fi > /dev/null
+            fi
+        done
+
+        (
+            cd "$da_cur"
+            echo "$da_cur" | sed "s:$da_root/::"
+            find . -mindepth 1 -maxdepth 1 -not -name vendor -not -name ".*" -not -type f | xargs ls -dl --color=always | sed -r 's/.*[0-9]:[0-9]{2} //'
+            echo
+
+
+            cd "$da_saved"
+            echo "$da_saved" | sed "s:$da_root/::"
+            find . -mindepth 1 -maxdepth 1 -not -name vendor -not -name ".*" -not -type f | xargs ls -dl --color=always | sed -r 's/.*[0-9]:[0-9]{2} //'
+            echo
+        )
+    done
+}
+
+_vendor-link() { COMPREPLY=( $( compgen -W "$(vendor-link)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _vendor-link vendor-link

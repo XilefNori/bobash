@@ -1,0 +1,98 @@
+export SSH_NODES_FILE=~/.ssh/nodes
+
+_complete-ssh-node() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}";
+    declare IFS=$'\n'
+
+    declare aliases=($(ssh-node -l))
+
+    COMPREPLY=($( compgen -W "${aliases[*]}" -- "$cur" ));
+
+    return 0
+}
+
+ssh-nodes() { ssh-node -l; }
+
+ssh-node()
+{
+    declare fa_nodes="$SSH_NODES_FILE"
+    # echo "fa_nodes="$SSH_NODES_FILE""
+
+    declare name list field strict
+
+    # -- Arguments --
+    declare flags="slf:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            s) strict=1 ;;
+            l) list=1 ;;
+            f) field="${OPTARG}" ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    name="${params[0]}"
+    [[ -n $list ]] && field=1
+    [[ -z $field ]] && field=0
+
+    [[ -z $strict ]] && {
+        name=${name##*@}
+        name=${name%:*}
+    }
+
+
+    # script='!/^\s*($|#)/ { gsub(/ /, "", $0); print $1 }'
+    # script='!/^\s*($|#)/ && $1 ~ NAME { gsub(/ /, "", $0); if($1 ~ NAME) { print $'$field' } }'
+
+    script='!/^\s*($|#)/ { gsub(/[ \t]+/, "", $0); if (!NAME || $1 == NAME) { print $'$field'} }'
+
+    awk -F: -v NAME="$name" "$script" "$fa_nodes"
+}
+
+complete -o nospace -F _complete-ssh-node ssh-node
+
+ssh-home() {
+    declare host ssh_home ssh_cmd cmd
+    declare -a args
+
+    host="$1"
+    ssh_cmd="$2"
+    before="$3"
+
+    ssh_home="$(ssh-node-home "$host")"
+
+    if [[ -n $ssh_home ]]; then
+        cmd="[[ -d $ssh_home ]] && { export HOME_REAL=\$HOME; HOME=$ssh_home; }"
+    else
+        echo "No special home is set for host: [$host]" >&2
+    fi
+
+    if [[ -n $ssh_cmd ]]; then
+        if [[ -z $before ]]; then
+            cmd="$cmd; exec bash --rcfile <(echo \"source \$HOME/.bashrc; $ssh_cmd\")"
+        else
+            cmd="$cmd; exec bash -c '{ $ssh_cmd; }; bash';"
+        fi
+    elif [[ -n $ssh_home ]]; then
+        cmd="$cmd; "'exec bash;'
+    fi
+
+    echo "ssh '$host' -t '$cmd'" >&2
+    command ssh "$host" -t "$cmd"
+}
+
+ssh-node-home() {
+    declare host="$1"
+    host=${host##*@}
+    host=${host%:*}
+
+    homedir="$(ssh-node "$host" -f 5)"
+
+    [[ -z $homedir ]] && homedir='~'
+
+    echo $homedir
+}
+
+complete -o default -o nospace -F _complete_ssh_hosts ssh ssh-home ssh-node-home

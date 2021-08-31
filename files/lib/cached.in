@@ -1,0 +1,168 @@
+CACHED_DEBUG=0
+
+ cached() { wrapper-help       cached "$@"; }
+_cached() { _wrapper-complete  cached     ; }
+complete -F _cached cached
+
+cached-cfg()  {  var-cfg "CACHED" "$@"; }
+_cached-cfg() { _var-cfg "cached-cfg" ; }
+complete -F _cached-cfg cached-cfg
+
+cached-cmd() {
+    declare update
+
+    # -- Arguments --
+    declare flags=":u:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            u) update="${OPTARG}"  ;;
+
+            :) [[ -n ${OPTARG} ]] && params+=("-${OPTARG}")   ;;
+            ?) [[ -n ${OPTARG} ]] && params+=("-${OPTARG}")   ;;
+            *) echo "Unexpected: ${flag} ${OPTARG} ${OPTIND}"; return 1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare fa_cache="${params[0]}"
+    declare cmd_line=("${params[@]:1}")
+
+    [[ -z $fa_cache ]] && { echo 'Must set fa_cache!'     >&2; return 1; }
+    [[ -z $cmd_line ]] && { echo 'Must set command line!' >&2; return 1; }
+
+    [[ -z $update ]] && update=600
+
+    [[ $CACHED_DEBUG -gt 0 ]] && {
+        echo "-- Run -----"
+        echo "fa_cache=$fa_cache"
+        echo "cmd_line=$cmd_line"
+        echo "------------"
+    } >&2
+
+    if [[ ! -f $fa_cache ]]; then
+        touchf "$fa_cache" || { echo 'Cannot create cache [$fa_cache]!' >&2; return 1; }
+    fi
+
+    [[ -w $fa_cache ]] || { echo 'Cache not writeable cache [$fa_cache]!' >&2; return 1; }
+
+    declare ts="$(($(date +%s) - $(date +%s -r "$fa_cache")))"
+
+    declare refresh
+    [[ $ts -gt $update ]] && refresh=1
+
+    [[ $CACHED_DEBUG -gt 0 ]] && {
+        echo "-- Cache --"
+        echo "cache life=$ts"
+        echo "cache update=$update"
+        if [[ ! -s $fa_cache  ]]; then
+            echo "Will refresh cache (empty cache file)"
+        elif [[ -n $refresh ]]; then
+            echo "Will refresh cache (time elapsed)"
+        else
+            echo "No cache refresh"
+        fi
+        echo "----------"
+    } >&2
+
+
+    [[ ! -s $fa_cache || -n $refresh ]] && {
+        "${cmd_line[@]}" > "$fa_cache"
+    }
+
+    cat "$fa_cache"
+}
+
+cache-file() {
+    declare name prefix
+
+    if   [[ ${#@} -eq 1 ]]; then
+        prefix="${1%%-*}"
+        name="${1#*-}"
+    elif [[ ${#@} -eq 2 ]]; then
+        name="${1}"
+        prefix="${2}"
+    else
+        echo "Usage: $FUNCNAME <prefix-name> or $FUNCNAME <name> <prefix>" >&2
+        return 1
+    fi
+
+    name="${name/\//_}"
+
+    declare da_cache
+            da_cache="$(_cache-dir "$prefix")" || return $?
+    declare fa_cache="$da_cache/$name"
+
+    [[ $CACHED_DEBUG -gt 0 ]] && echo "cache-file: $fa_cache" >&2
+
+    [[ ! -e $fa_cache ]] && touch "$fa_cache"
+    [[ ! -e $fa_cache ]] && return 1
+
+    echo "$fa_cache"
+}
+
+_cache-dir() {
+    declare da_root
+    if [[ -d "$1" || "${1:0:1}" == '/' ]]; then
+        da_root="$1";
+    else
+        declare prefix="$1"
+        prefix="${prefix^^}"
+        prefix="${prefix/-/_}"
+
+        declare var="${prefix}_DIR"
+
+        [[ -z ${!var} ]] && { echo "$FUNCNAME: Variable ${var} is empty!" >&2; return 1; }
+
+        da_root="${!var}"
+    fi
+
+    da_cache="$da_root/.cache"
+
+    [[ ! -d $da_cache ]] && mkdir -p "$da_cache"
+
+    [[ $CACHED_DEBUG -gt 0 ]] && echo "cache-dir : $da_cache" >&2
+
+    echo "$da_cache"
+}
+
+cache-list() {
+    declare dir
+    dir="$(_cache-dir "$1")" || return 1
+    shift 1
+
+    ls -l "$dir"
+}
+
+cache-show() {
+    declare dir
+    dir="$(_cache-dir "$1")" || return 1
+    shift 1
+
+    less -XF "$dir/$1"
+}
+
+_cache-file() {
+    declare dir
+    dir="$(_cache-dir "$1")" || return 1
+    shift 1
+
+    COMPREPLY=($( compgen -W "$(ls "$dir")" -- "${COMP_WORDS[COMP_CWORD]}" ));
+}
+
+cache-delete() {
+    declare dir
+    dir="$(_cache-dir "$1")" || return 1
+    shift 1
+
+    if [[ "$#" -eq 0 ]]; then
+        rm -rf "$dir"
+    else
+        (
+            cd "$dir"
+            rm -f "$@"
+        )
+    fi
+}
+

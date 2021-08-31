@@ -1,0 +1,36 @@
+bash_debug_on() {
+
+    if [[ $1 ]]; then
+        exec {fd_debug}>"$1"
+    else
+        exec {fd_debug}>&2
+    fi
+    
+    BASH_XTRACEFD="$fd_debug"
+    set -x
+}
+
+bash_debug_off() {
+    set +x
+    exec {fd_debug}>&-
+}
+
+bash_debug_info_full() {
+    export PS4='+$BASH_SOURCE:$LINENO:$FUNCNAME: '
+} 
+
+bash_debug_info_brief() {
+    export PS4='+ '
+} 
+
+bash_debug_confirm() {
+    read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND?"
+}
+
+bash_debug_confirm_on() {
+    trap 'debug_confirm' DEBUG 
+}
+
+bash_debug_confirm_off() {
+    trap - DEBUG 
+}

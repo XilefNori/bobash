@@ -1,0 +1,13 @@
+# For skipping local xdebug with empty 'XDEBUG_CONFIG=' edit php.ini to have
+# xdebug.remote_port    = 10001
+# xdebug.remote_timeout = 50
+
+XDEBUG_CONFIG="idekey=PHPSTORM remote_host=localhost remote_port=9000"
+PHP_IDE_CONFIG="serverName=local-server"
+
+xdebug-off -i
+
+# SHOULD be set by: 'b local edit post'
+# XDEBUG_REMOTE_CONFIG="remote_host=192.168.1.11 remote_port=9000"
+
+XDEBUG_REMOTE_CONFIG="remote_host=$(ip4-list | grep -P '192\.168\.1\.' | head -n 1) remote_port=9000"

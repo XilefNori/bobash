@@ -1,0 +1,31 @@
+-- Краткое описание -----------------------------------------
+
+Symfony - это просто набор сервисов и роутов.
+
+sf about - Версия symfony, php, framework, enviroment
+
+-- Контроллеры --
+
+Метод контроллера должен вернуть объект Symfony\Component\HttpFoundation\Response - единственное требование.
+
+Все маршруты смотрятся так:
+sf debug:router
+
+Маршруты задаются либо через:
+
+config/routes.yaml
+config/routes/*.yaml
+config/routes/<env>/*.yaml
+
+Либо через аннотации:
+
+/**
+ * @Route("/news/{slug}/heart", name="article_toggle_heart", methods={"POST"})
+ */
+public function toggleArticleHeart($slug, LoggerInterface $logger) {}
+
+-- Рецепты --
+
+Чтобы перезапустить рецепт нужно удалить vendor и symfony.lock (или удалить нужные рецепты из symfony.lock) и перезапустить composer install
+
+If you want to re-run a recipe, you can remove the vendor directory and symfony.lock file (or just remove the recipes you want to reset in the symfony.lock file) and run composer install again.

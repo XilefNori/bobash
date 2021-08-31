@@ -1,0 +1,78 @@
+# ---------------------------------------------------------------------------------------
+
+VAGRANT_PLUGINS=(vagrant-hostsupdater vagrant-reload vagrant-disksize)
+
+VAGRANT_MACHINE_COMMANDS='up halt resume reload status suspend destroy package provision ssh ssh-config upload'
+
+t() { [[ -n $2 && ! $2 =~ ^- ]] && echo 1; }
+
+vagrant() {
+(
+    declare dir=.
+
+    if [[ ! -e Vagrantfile ]]; then
+        dir="$(find . -mindepth 2 -maxdepth 2 -type f -name Vagrantfile -printf "%h" -quit)"
+        if [[ -n $dir ]]; then
+            echo "Using [$dir/Vagrantfile]" >&2
+            cd "$dir"
+        fi
+    fi
+
+    [[ -e vagrant.env ]] && {
+        echo "Sourcing [$dir/vagrant.env]" >&2
+        source vagrant.env
+    }
+
+    wrapper-help-command  vagrant vagrant "$@" ;
+)
+}
+_vagrant() { _wrapper-complete     vagrant __vagrant    ; }
+complete -F _vagrant vagrant
+
+ vagrant-cfg() {  var-cfg "VAGRANT" "$@"; }
+_vagrant-cfg() { _var-cfg "vagrant-cfg" ; }
+complete -F _vagrant-cfg vagrant-cfg
+
+# ---------------------------------------------------------------------------------------
+
+vagrant-plugin-all() {
+    vagrant plugin install "${VAGRANT_PLUGINS[@]}"
+}
+
+vagrant-.provision-list() {
+    declare file=Vagrantfile
+
+    if [[ ! -e $file ]]; then
+        file="$(find . -mindepth 2 -maxdepth 2 -type f -name Vagrantfile -print -quit)"
+        [[ -n $file ]] || { echo 'No [Vagrantfile] is found!' >&2; return 1; }
+
+        # echo "Using [$file]" >&2
+    fi
+
+    grep -oP '(?<=provision )"[^"]+"' "$file" | sed 's:"::g'
+}
+
+vagrant-provision() {
+    declare vagrant_opts=()
+    [[ $# -gt 0 ]] && vagrant_opts+=(--provision-with)
+
+    command vagrant provision "${vagrant_opts[@]}" "$@"
+}
+
+_vagrant-provisions() { COMPREPLY=( $( compgen -W "$(vagrant-.provision-list)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _vagrant-provisions vagrant-provision
+
+vagrant-ssh-config-add() {
+    declare vagrant_opts=()
+    declare host="$1"
+    [[ -n $host ]] && vagrant_opts+=(--host "$host")
+
+    {
+        echo
+        vagrant ssh-config "${vagrant_opts[@]}" |
+            if type dos2unix &> /dev/null; then dos2unix; else cat; fi
+    } >> ~/.ssh/config
+
+    echo $'\n'"-- Added to ~/.ssh/config ------"$'\n'
+    tail -n 15 ~/.ssh/config
+}

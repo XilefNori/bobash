@@ -1,0 +1,110 @@
+# Archive
+complete -f -o default -X '*.+(zip|ZIP)'  zip
+complete -f -o default -X '!*.+(zip|ZIP)' unzip
+complete -f -o default -X '*.+(z|Z)'      compress
+complete -f -o default -X '!*.+(z|Z)'     uncompress
+complete -f -o default -X '*.+(gz|GZ)'    gzip
+complete -f -o default -X '!*.+(gz|GZ)'   gunzip
+complete -f -o default -X '*.+(bz2|BZ2)'  bzip2
+complete -f -o default -X '!*.+(bz2|BZ2)' bunzip2
+
+# Postscript,pdf,dvi.....
+complete -f -o default -X '!*.ps'  gs ghostview ps2pdf ps2ascii
+complete -f -o default -X '!*.dvi' dvips dvipdf xdvi dviselect dvitype
+complete -f -o default -X '!*.pdf' acroread pdf2ps
+complete -f -o default -X '!*.+(pdf|ps)' gv
+complete -f -o default -X '!*.texi*' makeinfo texi2dvi texi2html texi2pdf
+complete -f -o default -X '!*.tex' tex latex slitex
+complete -f -o default -X '!*.lyx' lyx
+complete -f -o default -X '!*.+(htm*|HTM*)' lynx html2ps download.sh html2text.py
+
+# Multimedia
+complete -f -o default -X '!*.+(jp*g|gif|xpm|png|bmp)' xv gimp resize.sh
+complete -f -o default -X '!*.+(mp3|MP3)' mpg123 mpg321
+complete -f -o default -X '!*.+(ogg|OGG)' ogg123
+
+complete -A hostname   rsh rcp telnet rlogin r ftp ping disk
+complete -A variable   printenv pe
+complete -A directory  cd
+
+bash-completion() {
+    declare verbose
+
+    # -- Arguments --
+    declare flags=":v" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            v) verbose=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    [[ -n "$BOBASH_LOAD_VERBOSE" ]] && verbose=1
+
+    declare -a files=(/usr/share/bash-completion/bash_completion)
+    declare sourced
+    declare fallback="$BOBASH_DIR/etc/bash_completion"
+
+    [[ -n "$verbose" ]] && { echo "-- Loading completion ---------" >&2 ; }
+
+    [[ -n "$verbose" ]] && echo "Loading fallback [$fallback]" >&2
+    source "$fallback"
+
+    [[ -n "$verbose" ]] && echo "Sourcing dir [$BOBASH_DIR/etc/bash_completion.d]"
+    for f in "$BOBASH_DIR/etc/bash_completion.d"/*; do
+        [[ -n "$verbose" ]] && echo "Sourcing [$f]"
+        
+        source "$f"
+    done
+
+    declare f
+    for f in "${files[@]}"; do
+        if [[ -r $f ]]; then
+            source "$f"
+            
+            sourced="$f"
+            [[ -n "$verbose" ]] && echo "Sourcing [$f]"
+
+            if [[ -d ${f%/*}/completions ]]; then
+                for f in "${f%/*}"/completions/{git,ssh,tar,java,jar}*; do
+                    [[ -n "$verbose" ]] && echo "Sourcing [$f]"
+                    source "$f"
+                done
+            fi
+
+            break
+        fi
+    done
+
+    if type brew &>/dev/null; then
+      HOMEBREW_PREFIX="$(brew --prefix)"
+
+      declare files=(
+        "$HOMEBREW_PREFIX/etc/bash_completion"
+        "$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"
+        # "$HOMEBREW_PREFIX/etc/bash_completion.d/"*
+      )
+
+      for f in "${files[@]}"; do
+        if [[ -r "$f" ]]; then 
+          [[ -n "$verbose" ]] && echo "Sourcing [$f]"
+
+          source "$f"
+    
+          sourced="$f"
+        fi
+      done
+    fi
+
+}
+
+[[ -f /etc/bash_completion ]] && source /etc/bash_completion
+
+bash-completion >&2
+
+unset -f _tilde
+_tilde() { :; }
+
+COMP_WORDBREAKS="${COMP_WORDBREAKS/:/}"

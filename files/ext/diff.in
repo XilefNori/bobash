@@ -1,0 +1,11 @@
+if which colordiff >& /dev/null; then
+    diff() { command diff -wbBu "$@" | colordiff; test ${PIPESTATUS[0]} -eq 0; }
+else
+    diff() { command diff -wbBu "$@"; }
+fi
+
+if which colordiff >& /dev/null; then
+	patch-color() { cat "$1" | colordiff  | less -N -pdiff "${@:2}"; }
+else
+	patch-color() { vim "$@"; }
+fi

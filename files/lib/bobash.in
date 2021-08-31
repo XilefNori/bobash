@@ -1,0 +1,221 @@
+[[ -d $BOBASH_DIR ]] && [[ -z $BOBASH_DIR_DEPLOY ]] && export BOBASH_DIR_DEPLOY="$BOBASH_DIR/deploy"
+
+# --------------------------------------------------------------------------------------
+
+ bobash-cfg() {  var-cfg "BOBASH" "$@"; }
+_bobash-cfg() { _var-cfg "bobash-cfg" ; }
+complete -F _bobash-cfg bobash-cfg
+
+ bobash-complete() {  wrapper-complete-cmd  bobash "$@" ; }
+_bobash-complete() { _wrapper-complete-cmd  bobash      ; }
+complete -F _bobash-complete bobash-complete
+
+ bobash() { wrapper-help  bobash "$@"; }
+_bobash() { _wrapper-complete  bobash     ; }
+complete -F _bobash bobash
+
+# --------------------------------------------------------------------------------------
+
+bobash-deploy() (
+    "$BOBASH_DIR_DEPLOY/deploy.sh" "$@"
+)
+
+_bobash-help-command-deploy() {
+    "$BOBASH_DIR_DEPLOY/deploy.sh" -?
+}
+
+_bobash-deploy() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # echo "cur=$cur, prev=$prev, COMP_CWORD=$COMP_CWORD" >&2
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} == 1 ]] ; then
+        declare nodes="$(bobash-node -l)"
+        COMPREPLY=( $( compgen -W "${nodes}" -- "$cur" ) )
+
+        return
+    fi
+
+    if [[ "${cur:0:1}" != '-' ]]; then
+        if [[ ${COMP_CWORD} == 2 ]] ; then
+            declare actions="$(find "$BOBASH_DIR_DEPLOY/action" -name '*.ssh' -printf '%f\n' | sed -r 's/\.[^.]+$//')"
+            COMPREPLY=( $(compgen -W "${actions}" -- ${cur}) )
+
+            return
+        fi
+
+        # if [[ "${prev}" == '-f' ]]; then
+        #     COMPREPLY=( $( compgen -o filenames -A file -- "$cur" ) )
+        #
+        #     return
+        # fi
+
+        if [[ "${prev}" == '-f' ]]; then
+            declare items="$(find "$BOBASH_DIR_DEPLOY/../build" -mindepth 1 -name 'bobash_*.tar.gz' -type f -printf '%f\n' | sed 's/^bobash_//; s/.tar.gz$//')"
+            COMPREPLY=( $( compgen -W "${items}" -- "$cur" ) )
+
+            return
+        fi
+
+        if [[ "${prev}" == '-o' ]]; then
+            declare items="$(find "$BOBASH_DIR_DEPLOY/../files/os" -mindepth 1 -type d -printf '%f\n')"
+            COMPREPLY=( $(compgen -W "${items}" -- ${cur}) )
+
+            return
+        fi
+
+        if [[ "${prev}" == '-h' ]]; then
+            declare items="$(find "$BOBASH_DIR_DEPLOY/../files/host" -mindepth 1 -type d -printf '%f\n')"
+            COMPREPLY=( $( compgen -W "${items}" -- "$cur" ) )
+
+            return
+        fi
+
+        if [[ "${prev}" == '-t' ]]; then
+            declare node="${COMP_WORDS[1]}"
+
+            [[ -z $node ]] && { echo 'Node is undefined' >&2 ; return 1 ; }
+
+            declare cfg_arr
+            IFS=':' read -a cfg_arr <<< "$(bobash-node "$node")"
+            channel="${cfg_arr[1]}"
+
+            case "$channel" in
+                ssh   ) opts="$(ssh-hosts)" ;;
+                docker) opts="$(docker-list-container)" ;;
+                kube  ) opts="$(kube-list-pods -C)" ;;
+                *     ) echo "Unknown channel [$channel]"; return 1 ;;
+            esac 2>/dev/null
+
+            COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+
+            return
+        fi
+    fi
+
+    return 0
+}
+
+complete -F _bobash-deploy bobash-deploy
+
+bobash-build() (
+    "$BOBASH_DIR_DEPLOY/build.sh" -o "$1" -h "$2"
+)
+
+_bobash-build() {
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} == 1 ]] ; then
+        declare items="$(find "$BOBASH_DIR_DEPLOY/../files/os" -mindepth 1 -type d -printf '%f\n')"
+        COMPREPLY=( $(compgen -W "${items}" -- ${cur}) )
+    elif [[ ${COMP_CWORD} == 2 ]] ; then
+        declare items="$(find "$BOBASH_DIR_DEPLOY/../files/host" -mindepth 1 -type d -printf '%f\n')"
+        COMPREPLY=( $( compgen -W "${items}" -- "$cur" ) )
+    fi
+
+    return 0
+}
+
+complete -F _bobash-build bobash-build
+
+# -- local --------------------------------------------------------------------
+
+ bobash-local() { wrapper-simple    bobash_local "$@"; }
+_bobash-local() { _wrapper-complete bobash_local     ; }
+
+complete -F _bobash-local bobash-local
+
+bobash_local-create() {
+    declare -a files=($(find "$BOBASH_DIR/local/" -type f))
+
+    declare filename
+    for filename in "${files[@]}"; do
+        declare home_filename="$HOME/$(basename "$filename")"
+
+        if [[ -f $home_filename ]]; then
+            echo "File [$home_filename] already exists"
+        else
+            echo "Creating [$home_filename] from template $filename"
+            cp "$filename" "$home_filename"
+        fi
+    done
+}
+
+bobash_local-path() { echo $HOME/.bashrc-local-$1;    }
+bobash_local-source() { source $HOME/.bashrc-local-$1;    }
+bobash_local-edit()   { "$EDITOR" $HOME/.bashrc-local-$1; }
+
+_bobash_local-files() {
+    declare items="$(find "$HOME/" -maxdepth 1 -type f -name '*.bashrc-local*' | sed "s:$HOME/.bashrc-local-::")"
+
+    COMPREPLY=( $( compgen -W "$items" -- "${COMP_WORDS[COMP_CWORD]}" ) )
+}
+
+complete -F _bobash_local-files bobash_local-edit bobash_local-source bobash_local-path
+
+bobash_local-delete() {
+    echo 'Deleting local files...'
+
+    find "$HOME/" -maxdepth 1 -type f -name '*.bashrc-local*' -print -delete
+
+    echo 'Deleted.'
+}
+
+# -- install --------------------------------------------------------------------
+
+bobash-install() {
+    declare da_install="$BOBASH_DIR/install"
+    declare view_logs
+
+    # -- Arguments --
+    declare flags="lO" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            l) view_logs=1                            ;;
+            O) _complete-cmd-options "$flags"; return ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    if [[ ${#@} == 0 ]]; then
+        find -L "$da_install" -name '*.sh' | sed -e "s:$da_install/::" -e 's:.sh::'
+        return
+    fi
+
+    fa_install_script="$da_install/$1.sh"
+    fa_install_log="${fa_install_script%.*}.log"
+
+    chmod +x "$fa_install_script"
+    echo "${fa_install_script##*/} > ${fa_install_log##*/}"
+
+    [[ -n $view_logs ]] && {
+        "$fa_install_script" | tee "${fa_install_log}"
+    } || {
+        "$fa_install_script" > "${fa_install_log}"
+    }
+}
+
+complete -F _complete-cmd bobash-install
+
+bobash-install-logs() {
+    declare da_install="$BOBASH_DIR/install"
+
+    if [[ ${#@} == 0 ]]; then
+        find -L "$da_install" -name '*.log' | sed -e "s:$da_install/::"
+        return
+    fi
+
+    fa_install_log="$da_install/$1"
+
+    less "$fa_install_log"
+}
+
+complete -F _complete-cmd bobash-install-logs
+

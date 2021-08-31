@@ -1,0 +1,21 @@
+# Сгенерировать ключ
+
+ssh-keygen -t rsa -f ~/.ssh/access-key-something -N new_passphrase
+
+# Изменить пароль у ключа ssh ----------------------------------------------------------------
+
+ssh-keygen -p -f ~/.ssh/id_rsa
+
+     -f filename
+             Specifies the filename of the key file.
+
+     -N new_passphrase
+             Provides the new passphrase.
+
+     -P passphrase
+             Provides the (old) passphrase.
+
+     -p      Requests changing the passphrase of a private key file instead of
+             creating a new private key.  The program will prompt for the file
+             containing the private key, for the old passphrase, and twice for
+             the new passphrase.

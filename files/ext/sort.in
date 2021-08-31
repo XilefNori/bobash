@@ -1,0 +1,23 @@
+uniq-c() {
+    declare -a params options
+    for i in "$@"; do
+        [[ $i == -* ]] && {
+        	options+=("$i")
+        } || {
+	        params+=("$i")
+        }
+    done
+
+	declare field="${params[0]}"
+
+	[[ -n $field && $field != 1 ]] && {
+		options=("-k$field,$field" "${options[@]}")
+	}
+
+	sort | uniq -c | sort -b "${options[@]}" -k1,1nr
+}
+
+
+sort-len() {
+    awk '{print length, $0}' | sort -n "$@" | cut -f2- -d' '
+}

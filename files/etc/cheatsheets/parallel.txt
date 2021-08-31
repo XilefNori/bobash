@@ -1,0 +1,31 @@
+# Making stage
+
+mkdir -p ~/parallel-tutorial && cd ~/parallel-tutorial
+seq 5 | parallel seq {} '>' example.{}
+
+# Input source
+
+parallel echo ::: 1 2 3 4 5
+parallel wc   ::: example.*
+
+
+find example.* -print | parallel -n 2 echo File
+find example.* -print | parallel -n 3 echo File
+
+parallel echo counting lines';' wc -l ::: example.*
+parallel 'echo counting lines; wc -l' ::: example.*
+
+cat > ~/test.sh << 'e'
+    echo $title
+    echo "content"
+e
+
+export title=Hello
+parallel "$(cat ~/test.sh)" ::: example.*
+
+# Multiple sources
+
+parallel echo ::: S M L ::: Green Red
+parallel echo count {1} in {2}';' wc {1} {2} ::: -l -c ::: example.*
+
+parallel --dry-run echo count {1} in {2}';' wc {1} {2} ::: -l -c ::: example.*

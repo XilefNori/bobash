@@ -1,0 +1,124 @@
+SWAGGER_MAVEN_BUILD_URL=https://repo1.maven.org/maven2/io/swagger/codegen/v3/swagger-codegen-cli/
+SWAGGER_VERSION=3.0.18
+
+SWAGGER_DIR=~/.swagger-codegen
+
+ swc() { wrapper-help       swagger-codegen "$@" ; }
+_swc() { _wrapper-complete  swagger-codegen -C; }
+complete -F _swc swc
+
+ swagger-codegen-cfg() {  var-cfg "SWAGGER" "$@"; }
+_swagger-codegen-cfg() { _var-cfg "swagger-codegen-cfg" ; }
+complete -F _swagger-codegen-cfg swagger-codegen-cfg
+
+swagger-codegen-version() {
+    if [[ -n $1 ]]; then
+        SWAGGER_VERSION="$1"
+    fi
+
+    if [[ -n $SWAGGER_VERSION ]]; then
+        SWAGGER_JAR=swagger-codegen-cli-$SWAGGER_VERSION.jar
+        SWAGGER_BIN=~/bin/$SWAGGER_JAR
+    fi
+
+    var-echo SWAGGER_VERSION SWAGGER_JAR
+}
+_swagger-codegen-version() { COMPREPLY=( $( compgen -W "$(_swagger_codegen-version -C)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _swagger-codegen-version swagger-codegen-version
+
+swagger-codegen-version &> /dev/null
+
+inst-swagger-codegen() {
+    [[ -z $SWAGGER_VERSION ]] && { echo "No swagger-codegen version!"; return 1; }
+
+    if [[ -e $SWAGGER_BIN ]]; then
+        echo "swagger-codegen already installed at [$SWAGGER_BIN]"; return 0;
+    fi
+
+    declare url="$SWAGGER_MAVEN_BUILD_URL$SWAGGER_VERSION/$SWAGGER_JAR"
+    wget $url -O "$SWAGGER_BIN"
+
+    swagger-codegen-cli version
+}
+
+swagger-codegen-list-langs() {
+    swagger-codegen-cli langs | grep 'Available languages:' | sed -r 's/Available languages: //; s:\[|\]::g; s:, :\n:g'
+}
+
+swagger-codegen-cli() {
+    [[ ! -e $SWAGGER_BIN ]] && { echo "No swagger installed!"; return 1; }
+
+    java -jar "$(filepath "$SWAGGER_BIN")" "$@" | grep -s -Fv "[main] DEBUG"
+}
+
+if ! type swagger-codegen &> /dev/null; then
+    swagger-codegen() { swagger-codegen-cli "$@"; }
+fi
+
+swagger-codegen-config() {
+    [[ ! -e $SWAGGER_BIN ]] && { echo "No swagger installed!"; return 1; }
+
+    lang="$1"
+
+    swagger-codegen-cli config-help -l $lang | less
+}
+
+_swagger-codegen-config() { COMPREPLY=( $( compgen -W "$(swagger-codegen-list-langs)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _swagger-codegen-config swagger-codegen-config
+
+_swagger-codegen-cli() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} == 1 ]] ; then
+        commands="generate config-help meta langs version --help"
+
+        COMPREPLY=( $( compgen -W "$commands" -- "${COMP_WORDS[COMP_CWORD]}" ) )
+
+        return
+    fi
+
+    if [[ "${prev}" == '-l' ]]; then
+        COMPREPLY=( $( compgen -W "$(swagger-codegen-list-langs)" -- "$cur" ) )
+
+        return
+    fi
+
+    if [[ "${prev}" == '-c' ]]; then
+        declare IFS=$'\n'
+        COMPREPLY=( $( compgen -o plusdirs  -f -X '!*.@(json)' -- "$cur" ) )
+
+        return
+    fi
+
+    return
+}
+
+complete -o filenames -F _swagger-codegen-cli swagger-codegen-cli swagger-codegen
+
+_swagger_codegen-version() {
+    declare cache
+
+    # -- Arguments --
+    declare flags="C" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME" "$SWAGGER_DIR")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME"
+    else
+        curl "$SWAGGER_MAVEN_BUILD_URL" -s  | grep -oP 'href="(\d+\.)?(\d+\.)[^"]*"' | sed 's:href=::; s:["/]::g'
+    fi
+
+}

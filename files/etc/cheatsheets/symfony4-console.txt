@@ -1,0 +1,75 @@
+-- WebServer --------------------------------------------------------------------------------------
+
+sf server:stop  127.0.0.1:8000
+sf server:start 127.0.0.1:8000
+sf server:run   127.0.0.1:8000
+
+-- Debug/Info -------------------------------------------------------------------------------------
+
+sf about                   # Базовые настройки php, framework, enviroment
+
+sf debug:autowiring        # список всех сервисов которые можно внедрить
+
+-- Bundles --
+
+sf config:dump              # список всех бандлов
+sf config:dump  BundleName  # всех возможные переключатели конфигурации бандла
+sf debug:config BundleName  # текущая конфигурация бандла
+
+-- Containers --
+
+sf debug:container --ansi              # список всех имеющихся сервисов
+sf debug:container --ansi --parameters # список всех парметров сервисов
+sf debug:container --ansi --types      # список всех интерфейсов
+sf debug:container --ansi --tags       # список всех тегов
+sf debug:container --ansi              # список всех имеющихся сервисов
+
+-- Cache --
+
+sf cache:clear  --no-warmup  # Очистит кэш-symfony
+sf cache:clear               # Очистит и пересоберет кэш-symfony
+sf cache:warmup              # Прогреет кэш-symfony
+
+-- Maker ------------------------------------------------------------------------------------------
+
+sf debug:router            # список всех роутов
+sf debug:router <route>    # роут
+sf router:match <url>      # какой роут соответсует данному URL-у
+
+-- Maker ------------------------------------------------------------------------------------------
+
+composer require maker --dev  # Установить maker
+
+sf make:command               # Создать команду
+sf make:twig-extension        # Создать расширение для twig
+sf make:migration             # Создать миграцию
+sf make:entity [<EntityName>] # Создать/дополнить сущность
+
+-- Doctrine ---------------------------------------------------------------------------------------
+
+sf doctrine:database:create        # Создание базы
+sf doctrine:database:drop --force  # Удаление базы
+
+sf doctrine:schema:update --force  # Создание схемы
+
+sf doctrine:migrations:migrate     # Выполнить миграцию
+sf doctrine:migrations:status      # Текущее состония миграций
+
+sf doctrine:query:sql "SQL query"  # Выполнить SQL-запрос
+
+
+-- Entities --
+
+sf make:entity [<EntityName>]  # Создать/дополнить сущность
+
+-- Migrations --
+
+sf make:migration              # Создать миграцию
+sf doctrine:migrations:migrate # Применить все миграции
+
+-- Fixtures --
+
+composer require orm-fixtures --dev
+
+sf make:fixtures           # Создать fixture
+sf doctrine:fixtures:load  # Загрузить fixture (будут очищенные данные в таблицах)

@@ -1,0 +1,11 @@
+tidy-xml() { tidy -utf8 -xml -w 255 -i -c -q -asxml "$@"; }
+tidy-html() { tidy -utf8 -w 255 -i -c -q -ashtml "$@"; }
+
+xml-indent() {
+    # xmllint --c14n "$@" | XMLLINT_INDENT=$'\t' xmllint --encode UTF-8 --format
+    for i in "$@"; do
+    	new="${i%.*}.i.xml"
+    	printf "%-40s > %s\n" "$i" "$new"
+    	XMLLINT_INDENT=$'\t' xmllint --encode UTF-8 --format "$i" > "$new"
+    done
+}

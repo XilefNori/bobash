@@ -1,0 +1,160 @@
+inst-ncdu() {
+    # Install NCurses Disk Usage
+    sudo apt install ncdu
+}
+
+ disk() { wrapper-help       du "$@"; }
+_disk() { _wrapper-complete  du     ; }
+complete -F _disk disk
+
+du-cfg()  {  var-cfg "DISK" "$@"; }
+_du-cfg() { _var-cfg "disk-cfg" ; }
+complete -F _du-cfg du-cfg
+
+du-free-space()        { df -kTh "$@"; }
+du-free-space-system() { df -kTh -x tmpfs -x devtmpfs -x squashfs; }
+
+du-browse() {
+    if ! which ncdu 2> /dev/null >&2; then
+        echo "Install 'ncdu' package"
+        echo "Run: inst-ncdu"
+
+        return 1
+    fi
+
+    declare refresh name sudo
+    declare -a ncdu_opts
+
+    # -- Arguments --
+    declare flags="e:X:rnxS" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+              r) refresh=1 ;;
+              n) name=1 ;;
+              S) sudo=sudo ;;
+              x) ncdu_opts+=(-x) ;;
+              e) ncdu_opts+=(--exclude "${OPTARG}") ;;
+              X) ncdu_opts+=(--exclude-from "${OPTARG}") ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare da_cache=~/.cache/ncdu.d
+    [[ ! -d $da_cache ]] && mkdir -p "$da_cache"
+
+    declare path="${params[0]}"
+    [[ -z "$path" ]] && path='.'
+
+    path=$(realpath "$path")
+
+    [[ ! -e "$path" ]] && { echo "Path not exist [$path]!"; return 1; }
+
+    declare hash="$(echo "$path" | md5sum | cut -d ' ' -f 1)"
+    declare fa_cache="$da_cache/$hash.ready"
+
+    declare update=$((60 * 60 * 24))
+
+    [[ -n $name ]] && {
+        if [[ -f $fa_cache ]]; then
+            declare left="$(($update - ($(date +%s) - $(date +%s -r "$fa_cache"))))"
+
+            echo "Path: $path"
+            echo "File: $fa_cache"
+            echo "Date: $(date +"%F %T" -r "$fa_cache")"
+            echo "Left: $(time_str_hours "$left")"
+            if [[ $left -lt 0 ]]; then
+                echo "Is outdated"
+            fi
+
+            return
+        else
+            echo "No cache file for path: $path"
+
+            return 1
+        fi
+    }
+
+    if [[ ! -f ${fa_cache} ]]; then
+        touchf "$fa_cache" || { echo "Cannot create cache [$fa_cache]!"; return 1; }
+    fi
+
+    [[ -w ${fa_cache} ]] || { echo "Cache not writeable [$fa_cache]!"; return 1; }
+
+    declare ts="$(($(date +%s) - $(date +%s -r "$fa_cache")))"
+
+    [[ $ts -gt $update ]] && {
+        refresh=1
+        echo "Cache is outdated. Updating..."
+    }
+
+    if [[ -n $refresh || ! -s "$fa_cache" ]]; then
+        $sudo ncdu "${ncdu_opts[@]}" "$path" -o "$fa_cache"
+    fi
+
+    ncdu -f "$fa_cache"
+}
+
+du-browse-system() {
+    du-browse / -S -e /media -e /mnt -e /proc "$@"
+}
+
+du-list() {
+    declare refresh name sudo
+    declare -a find_opts du_opts
+
+    # -- Arguments --
+    declare flags="e:t:rnS" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            S) sudo=sudo ;;
+            r) refresh=1 ;;
+            n) name=1 ;;
+            e) find_opts+=(-not -name "${OPTARG}") ;;
+            t) du_opts+=(--threshold "${OPTARG}") ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare da_cache=~/.cache/du-list
+    [[ ! -d $da_cache ]] && mkdir -p "$da_cache"
+
+    declare path="${params[0]}"
+    [[ -z "$path" ]] && path='.'
+
+    path=$(realpath "$path")
+
+    [[ ! -e "$path" ]] && { echo "Path not exist [$path]!"; return 1; }
+
+    declare hash="$(echo "$path" | md5sum | cut -d ' ' -f 1)"
+
+    declare fa_tmp=$da_cache/$hash.tmp
+    declare fa_cache=$da_cache/$hash.ready
+
+    [[ -n $name ]] && {
+        [[ -f $fa_cache ]] && { echo "$fa_cache"; return; }
+
+        echo "$fa_tmp"
+    }
+
+    if [[ -n $refresh || ! -f "$fa_cache" ]]; then
+        declare files=($(find "$path" -maxdepth 1 -mindepth 1 "${find_opts[@]}"))
+
+        {
+            echo "-- ($(date +"%F %T")) [$path] --"
+            $sudo du -ks "${du_opts[@]}" "${files[@]}" 2> /dev/null
+        }  | tee "$fa_tmp"
+
+        {
+            head -n1  "$fa_tmp"
+            tail -n+2 "$fa_tmp" | sort -nr
+        } > "$fa_cache"
+
+        rm -f "$fa_tmp"
+    else
+        cat "$fa_cache"
+    fi
+}

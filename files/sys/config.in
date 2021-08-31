@@ -1,0 +1,76 @@
+# System -------------------------------------------------------
+
+inside() {
+	if [[ -n "$SSH_CLIENT" ]]; then
+		echo ssh
+	elif [[ -e /proc/1/cgroup ]] && cat /proc/1/cgroup | grep docker -q; then
+	    echo docker
+	elif [[ -e /proc/1/cgroup ]] && cat /proc/1/cgroup | grep kubepods -q; then
+	    echo kube
+	fi
+}
+
+INSIDE=$(inside)
+
+UNAME=$( uname -s )
+UNAME=${UNAME/CYGWIN_*/Cygwin}
+UNAME=${UNAME/MINGW64_*/Mingw}
+
+USYSTEM=${UNAME,,}
+RELEASE=$( uname -r )
+RELEASE_STR=$(echo "$RELEASE" | sed 's:[^0-9a-x.]:_:g')
+
+if [[ $(whoami) == 'root' ]]; then
+	export I_AM_ROOT='1'
+else
+	export I_AM_USER='1'
+fi
+
+run-root() {
+    if [[ $I_AM_ROOT -gt 0 ]]; then
+        command "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+# Shell options ------------------------------------------------
+
+shopt -s checkwinsize # check the window size after each command and, if necessary,
+shopt -s nocaseglob   # Use case-insensitive filename globbing
+shopt -s cdspell      # When changing directory small typos can be ignored by bash
+
+shopt -s extglob      # Turn on extended globbing
+
+shopt -s autocd
+shopt -s cdable_vars
+shopt -s no_empty_cmd_completion
+shopt -s checkwinsize
+
+shopt -s globstar    # Recursive globbing
+
+# shopt -s nullglob
+
+# set -o notify       # Don't wait for job termination notification
+# set -o ignoreeof    # Don't use ^D to exit
+# set -o pipefail     # pipeline's return status is the value of the last (rightmost) command
+                      # to exit with a non-zero status, or zero if all commands exit successfully.
+
+# COMP_CONFIGURE_HINTS=1 # Define to avoid stripping description in --option=description of './configure --help'
+# COMP_TAR_INTERNAL_PATHS=1 # Define to avoid flattening internal contents of tar files
+
+# Editor & Pager -----------------------------------------------
+
+if which vim > /dev/null; then
+    export EDITOR='vim'
+else
+    export EDITOR='vi'
+fi
+
+export PAGER='less'
+
+# Etc -----------------------------------------------------------
+
+export HOSTFILE=/etc/hosts
+export GREP_COLOR='0;36'
+

@@ -1,0 +1,161 @@
+-- Common ---------------------------------------------------------
+
+docker --version # Версия docker
+docker version   # Версия docker полная
+docker info      # Инфа о docker системе
+
+-- Images ---------------------------------------------------------
+
+docker image pull debian:stable-slim               # скачать мини образ дебиана (тэг stable-slim)
+docker image push xilefnori/scratch-example:latest # закачать образ на docker-hub
+
+docker images debian # покажет все образы с именем debian
+docker images        # Список локальных имеджей   
+docker image ls      # Список локальных имеджей   
+
+docker search debian # Поиск имаджей
+
+# Сохранить image как Tar файл
+docker image save -o ~/multi-stage.tar local/multi-stage
+
+# Сборка ---
+
+# Переименовать image c новым тегом
+docker tag server:latest myname/server:latest
+
+# Собрать image с тэгом в текущей папке Dockerfile
+docker image build --tag local:dockerfile-example .
+
+# Удалить все образы с тегом none
+docker rmi -f $(docker images -q -f dangling=true)
+
+-- Containers ---------------------------------------------------------
+
+docker run hello-world  # Запустить контейнер
+docker run -ti alpine   # Запустить контейнер интерактивно
+
+docker commit <cid> <iid> # Сохранить контейнер <cid> в имедж и назвать его <iid>
+
+docker container ls     # Получить список контейнеров 
+docker ps               # Получить список контейнеров 
+docker ps -aq           # Получить список id (-q) всех (-a) контейнеров 
+
+docker container run    <image> # Создать и запустить контейнер из имеджа <image>
+docker container run -d <image> # Создать и запустить контейнер из имеджа <image> в фоновом режиме
+
+# Создать и запустить контейнер из имеджа <image> в интерактивном режиме (-i) открыт STDIN
+# подключить TTY (-t) и выполнить bash
+docker run -it <image> bash 
+
+# Создать и запустить контейнер в фоновом режиме (-d) c именем (--name) 
+# и прокинуть локальный порт 80 контенера на порт 8080 хост-машины
+docker run -d --name nginx-test -p 8080:80 <image>
+
+
+# Создать, запусить контейнер из <image>, открыть stdin, прочf
+echo 'aaa' | dc run -i <image> sed 's:a:b:g'
+
+docker container start <image> # Запустить контейнер <cid> c теми же настройками что он был создан
+
+docker container exec     <cid> cat /etc/debian_version # Запусить команду в контейнере и получить ответ
+docker container exec -it <cid> bash                    # Интерактивно запустить bash в контейнере
+
+# Прокинуть локальный порт 80 контейнера на любой свободый 
+# Порт можно узнать через docker port <cid>
+docker run -d --name <cid> -p 80 <image>
+
+# Запусить команду в контейнере, передать данные и получить ответ
+echo 'aaa' | docker exec -i <cid> sed 's:a:b:g'
+
+# Запусить контейнер, передать данные и получить ответ
+echo 'aaa' | docker run  -i <cid> sed 's:a:b:g'
+
+# Пример работы STDOUT и STDERR в контейнере выполнится: bash -c 'echo 123 >&2; echo 234'
+docker exec <cid> bash -c 'echo 123 >&2; echo 234' 2>/dev/null
+
+docker container attach <cid>                   # Подключиться к контейнеру <cid> в нефоновом режиме
+docker container attach <cid> --sig-proxy=false # Подключиться к контейнеру <cid> с возможностью отключиться
+
+docker container rm <cid>  # Удалить container
+docker container prune     # Удалить все остановленные контейнеры
+
+docker pause   <cid>       # Заморозить контейнер
+docker unpause <cid>       # Разморозить контейнер
+
+docker stop          <cid> # Послать SIGTERM главному процессу, а через 10 секунд SIGKILL
+docker stop -t 60    <cid> # Послать SIGTERM главному процессу, а через 60 секунд SIGKILL
+docker kill          <cid> # Послать SIGTERM главному процессу, а через 60 секунд SIGKILL
+docker start         <cid> # Запусить контейнер с параметрами заданными при создании
+docker restart -t 60 <cid> # stop -t 60 + start
+
+docker container create --name nginx-test -p 8080:80 <cid>
+
+-- Info ---------------------------------------------------------------
+
+docker container port <cid> # Показать прокинутые порты
+
+docker container diff <cid> # Показать изменненые/созданные файлы с момента запуска контейнера
+
+docker container logs --tail 5 -f <cid> # Последние 5 записей логов (--tail 5) и следить (-f) за логам
+docker container top <cid>              # Данные по процессам в контейнере
+docker container stats -a               # Статистика использования ресурсов контейнерами
+
+# Вывести в красивом формате данные о контейнере или имедже
+docker inspect <image|container> --format='{{json .}}' | jq . -C | less
+
+-- Network ---------------------------------------------------------------
+
+# Подключить контейнер app к конетейнеру service, service будет доступен из app как хост service
+docker run -i -d --name service alpine sh
+docker run -i -d --name app     --link service alpine sh
+docker exec app ping -c 3 service
+
+# Создать сеть с идентификаторов <network-id>
+docker network create <network-id>
+
+# Запустить контейнер в сети <network-id>
+docker container run -d --name redis --network <network-id> redis:alpine
+
+# Запустить контейнер в сети <network-id> c именем хоста в этой сети <nalias>
+docker container run -d --name redis2 --network <network-id> --network-alias <nalias> redis:alpine
+
+# Посмотреть состав сети
+docker network inspect 
+
+# Удалить не используемые сети
+docker network prune
+
+docker container run -d --name redis2 --network moby-counter2 --network-alias redis redis:alpine
+
+-- Volumes ---------------------------------------------------------------
+
+# Если volume-а нет он создастся, если папки в контейнер нет она создастся
+# Если volume пустой в него скопируются данные из подключенной папки
+# Если volume непустой, его содержимое закроет то что было в папке (содержимое папки останется)
+
+
+docker volume create <volume-id> # Создать volume
+
+docker volume prune        # Удалить неиспользуется volume
+docker volume ispect <vid> # Посмотреть мета-данные volume
+docker volume ls           # Список volumes
+
+#  Имя volume:папка контейнера:параметры
+-v redis_data:/data:ro
+#  Папка host:папка контейнера:параметры
+-v ~/redis_data:/data:ro
+
+
+# Подключить volume c именем redis_data подключить к папке /data в режиме rw
+docker run -d --name test -v redis_data:/data redis:alpine
+
+# Подключить анонимный volume к папке /data в режиме rw
+docker run -d --name test -v /data    redis:alpine
+docker run -d --name test -v /data:ro redis:alpine
+
+# Запустим временный контенер из <iid>, забиндим папку backup, возьмем volume из контенера <cid> 
+# Cделаем архив redis.tar из папки с volume-а из <cid> (/data) в нашу папку с backup
+docker run --rm --volumes-from <cid> -v ~/backup:/backup <iid> tar cvf /backup/redis.tar /data
+
+# Анонимный volume (/foo) будет стерт, awesome - останется жить
+docker run --rm -v /foo -v awesome:/bar busybox top

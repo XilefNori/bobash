@@ -1,0 +1,7 @@
+
+tracert()  { tracert.exe  "$@" 2>&1 | dos2utf; }
+route()    { route.exe    "$@" 2>&1 | dos2utf; }
+fsutil()   { fsutil.exe   "$@" 2>&1 | dos2utf; }
+ipconfig() { ipconfig.exe "$@" 2>&1 | dos2utf | less -j 0; }
+ping()     { ping.exe     "$@" 2>&1 | dos2utf; }
+powercfg() { powercfg.exe "$@" 2>&1 | dos2utf; }

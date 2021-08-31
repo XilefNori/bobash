@@ -1,0 +1,9 @@
+which-m() {
+	declare path=$(which "$@")
+
+	if [[ $USYSTEM == 'mingw' || $USYSTEM == 'cygwin' ]]; then
+		path="$(cygpath -m "$path")"
+	fi
+
+	echo "$path"
+}

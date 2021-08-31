@@ -1,0 +1,75 @@
+SCP_SYNC_ACTION=upload
+
+scp-rsync() {
+    rsync --partial --progress --rsh=ssh "$@"
+}
+complete -o nospace -F _scp scp-rsync
+
+scp-sync() {
+    declare fa_scp_file="$(realpath -PL "$(find-root .sync.scp)")"
+
+    [[ ! -f $fa_scp_file ]] && { echo 'No .sync.scp file could be found!' >&2; return 1; }
+
+    declare da_current="$(pwd)"
+
+    declare root_local="$(dirname "$fa_scp_file")"
+    declare root_remote="$(cat "$fa_scp_file" | head -n 1)"
+
+    declare -a scp_opts
+    declare direction yes
+
+    # -- Arguments --
+    declare flags="dDuUyYe:E:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            e|E) exclude="${OPTARG}" ;;
+            y|Y) yes=1;;
+            d|D) direction=download;;
+            u|U) direction=upload;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    [[ -z $direction ]] && direction=$SCP_SYNC_ACTION
+
+    declare path="${params[0]}"
+    [[ -z $path ]] && path=.
+
+    declare fa_path_local="$(realpath -LP "$path")"
+
+    declare fr_path_local="$(realpath -LP "$fa_path_local" --relative-base="$root_local")"
+
+    declare fa_path_remote="${root_remote%/}/$fr_path_local"
+
+    scp_opts+=(-r)
+
+    [[ $direction == download ]] && {
+        echo "Downloading [$fr_path_local]"
+        echo "[$root_local] <= [$root_remote]"
+
+        fa_path_local="$(dirname "$fa_path_local")"
+
+        scp_opts+=("$fa_path_remote" "$fa_path_local")
+    } || {
+        echo "Uploading [$fr_path_local]"
+        echo "[$root_local] => [$root_remote]"
+
+        fa_path_remote="$(dirname "$fa_path_remote")"
+
+        scp_opts+=("$fa_path_local" "$fa_path_remote")
+    }
+
+    echo
+    echo scp "${scp_opts[@]}"
+    echo
+
+    if [[ -z $yes ]] && ! simple_ask 'Proceed?'; then
+        echo 'Aborted!'
+        return $((128 + 2 ))
+    fi
+
+    scp "${scp_opts[@]}"
+}
+

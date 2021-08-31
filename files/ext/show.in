@@ -1,0 +1,26 @@
+len() { echo -n "$1" | wc -m; }
+
+function time_str_days() {
+    declare secs="$1"
+    printf "%02dдн %02dчас %02dмин" "$((secs/(24*60*60)))" "$((secs/(60*60)%24))" "$((secs/60%60))"
+} 
+
+function time_str_hours() {
+    declare secs="$1"
+    printf "%02d:%02d:%02d" "$((secs/3600))" "$((secs/60%60))" "$((secs%60))"
+} 
+
+function show_all_bash_colors() {
+    for i in `seq 0 1`; do 
+        for j in `seq 1 7`; do 
+            echo "[$i;3${j}m" : $'\033'"[$i;3${j}m"'TEXT TEXT TEXT'$'\033'"[0m" ;  
+        done 
+    done
+}
+
+get-date() {
+    fmt="+%Y-%m-%d %H:%M:%S %z"
+    date="$1"
+    [ -z "$date" ] && date="+0 sec"
+    \date "$fmt" --date="$date" 
+}

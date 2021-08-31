@@ -1,0 +1,6 @@
+# Local commands executed BEFORE .bobash init script
+
+# SSH_CLIENT=1
+# TERM=xterm-256color
+# LANG=en_US.UTF-8
+# BOBASH_LOAD_VERBOSE=1

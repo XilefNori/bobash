@@ -1,0 +1,7 @@
+#command
+    ^[        prev-file
+    ^]        next-file
+    \kD       forw-screen
+    \kU       back-screen
+    ^e        examine
+    ^f        forw-screen-force

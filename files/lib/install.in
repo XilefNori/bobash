@@ -1,0 +1,25 @@
+check-bin-not-exists() {
+
+    declare quite
+    # -- Arguments --
+    declare flags="q" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+       if getopts "$flags" flag; then case $flag in
+            q) quite=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare bin_name="${params[0]}"
+    declare bin_path="$(which $bin_name 2> /dev/null)"
+
+    if [[ -n $bin_path ]]; then
+        [[ -z $quite ]] && echo "Bin [$bin_name] is already installed at [$bin_path]" >&2
+
+        return 1
+    fi
+}
+
+complete -c check-bin-not-exists

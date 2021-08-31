@@ -1,0 +1,35 @@
+distro-show() {
+    cat /etc/*-release
+}
+
+distro-pretty() {
+	declare files=(/etc/*-release)
+
+	if [[ ! $files == '/etc/*-release' ]]; then
+	    cat /etc/*-release | grep PRETTY_NAME= | sed 's/PRETTY_NAME=//; s:"::g'
+	else
+		uname -os
+	fi
+}
+
+distro-id() {
+    declare files=(/etc/*-release)
+
+    if [[ ! $files == '/etc/*-release' ]]; then
+        cat /etc/*-release | grep '^ID=' | sed 's/ID=//'
+    else
+        echo ${OSTYPE,,}
+    fi
+}
+
+distro-system() {
+    uname=$( uname -s )
+    uname=${uname/CYGWIN_*/Cygwin}
+    uname=${uname/MINGW64_*/Mingw}
+
+    echo ${uname,,}
+}
+
+sysinfo() {
+    landscape-sysinfo;
+}

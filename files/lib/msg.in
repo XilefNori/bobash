@@ -1,0 +1,49 @@
+#-----------------------------------------------------------------------------
+# Initialization
+#-----------------------------------------------------------------------------
+
+unset BASENAME VERBOSE
+BASENAME=`basename "$0" 2> /dev/null`
+
+#-----------------------------------------------------------------------------
+# Funcs
+#-----------------------------------------------------------------------------
+
+error_status() {
+    local status=$1; shift
+    echo -e ${BASENAME}: ${LR}${1+"$@"}${NC} >&2
+    exit $status
+}
+
+
+# Subroutine to output an error, usage, and bail
+usage_error_status() {
+    local status=$1; shift
+    echo -e ${BASENAME}: ${LR}${1+"$@"}${NC} >&2
+    usage
+    exit $status
+}
+
+usage_error() {
+    usage_error_status 1 $@
+}
+
+# Subroutine to output progress message, unless in quiet mode
+verbose() {
+    [ -n "${VERBOSE}" ] && echo ${BASENAME}: ${DW}${1+"$@"}${NC} >&2
+}
+
+milestone() {
+	declare msg=${1+"$@"}
+
+	printf "\n%-80s\n\n" "#####_${LB}${msg}${NC}_" | sed 's/ /#/g;s/_/ /g' >&2
+}
+
+cinfo()   { echo ${COLOR_INFO}${1+"$@"}${NC}        ; }
+confirm() { echo ${COLOR_CONFIRM}${1+"$@"}${NC}     ; }
+warning() { echo ${COLOR_WARNING}${1+"$@"}${NC} >&2 ; }
+alert()   { echo ${COLOR_ALERT}${1+"$@"}${NC}   >&2 ; }
+error()   { echo ${COLOR_ERROR}${1+"$@"}${NC}   >&2 ; }
+err()     { echo ${COLOR_ERROR}${1+"$@"}${NC}   >&2 ; }
+
+any_key() { echo; read -p "Press any key... " -n 1; }

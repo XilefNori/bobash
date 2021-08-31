@@ -1,0 +1,410 @@
+Service - are just classes made to do some work.
+
+-- Application configuration --------------------------------------------------------
+
+Symfony framework uses the HttpKernel component to manage the loading of the service container
+configuration from the application and bundles and also handles the compilation and caching.
+
+Kernel creates a cached version of the container exists, and autorefesh it in debug-mode.
+Container is built from the application-level configuration and the bundles's extension configuration.
+
+Application level config is loaded from the `config` directory. Multiple files are loaded which are
+then merged when the extensions are processed.
+
+These files contain parameters and services that are loaded directly into the container, and
+configuration that is processed by bundle extensions.
+
+Extensions are registered with the ContainerBuilder when the kernel is booted.
+When the ContainerBuilder is compiled, the application-level configuration is passed to the
+Extension class, in which is usually processed with a Configuration class.
+
+Compiler passes are used to allow interaction between different bundles as they cannot affect
+each other's configuration in the extension classes.
+
+Config files are loaded in this order:
+
+- config/packages/*.{php,xml,yaml,yml}
+- config/packages/<env>/*.{php,xml,yaml,yml}
+- config/services.{php,xml,yaml,yml}
+- config/services_<env>.{php,xml,yaml,yml}
+
+-- Service configuration: services*.yaml ---------------------------------
+
+# Can set parameters with env reference
+# You can only set a parameter before the container is compiled, not at run-time.
+parameters:
+    locale: 'en'
+    # if LOGGER_EXCLUDE_CHANNELS env variable is not set, it is assumed to have this value
+    env(LOGGER_EXCLUDE_CHANNELS): '["request","event","doctrine","snc_redis"]'
+    env(LOGGER_CONSOLE_FORMATER_OPTIONS): '{"colors": false, "multiline": true}'
+
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+
+        public: false       # Allows optimizing the container by removing unused services
+                            # fetching services directly from the container via $container->get() won't work
+                            # Increases the container's performance
+
+        # Param binding
+        bind:
+            # Link param-name to enviroment variable value
+            $appName: '%env(string:APP_NAME)%'
+
+            # Link param-name to container parameter value
+            $isDebug: '%kernel.debug%'
+
+            # Link service by param-name
+            $markdownLogger: '@monolog.logger.markdown'
+
+            # Link service by type-hint
+            Nexy\Slack\Client: '@nexy_slack.client'
+
+            # Link service by type-hint and param-name
+            Psr\Log\LoggerInterface $logger: '@monolog.logger.markdown'
+
+            # Send to $rules requirement array of all services tagged with 'app.foo.rule'
+            iterable $rules: !tagged_iterator app.foo.rule
+
+    # -- Batch/group configuring --------------------------------------------------------------
+
+    # Registering all classes as services. The id of each service is its FQCN.
+    # From namespace 'App'
+    App\:
+        resource: '../src/*'
+        exclude: '../src/{DependencyInjection,Event,Entity,Form,Exception,Migrations,Tests,Lib,Kernel.php}'
+
+
+    # If you override a service, none of the options (e.g. public) are inherited from the import.
+    # But the overridden service does still inherit from _defaults.
+
+
+    # Adding tags to all services for the resource
+    # From namespace 'App\Controller'
+    App\Controller\:
+        resource: '../src/Controller'
+        tags:
+            - 'controller.service_arguments'
+
+    # Multiple definitions from the same namespace 'App\Domain'
+    command_handlers:
+        namespace: App\Domain\
+        resource: '../src/Domain/*/CommandHandler'
+        tags: [command_handler]
+
+    event_subscribers:
+        namespace: App\Domain\
+        resource: '../src/Domain/*/EventSubscriber'
+        tags: [event_subscriber]
+
+    # -- Configuring service -----------------------------------------------------------
+
+    # Make public alias for private service 'App\Mail\PhpMailer'
+    app.mailer:
+        alias: App\Mail\PhpMailer
+        public: true
+
+    # Register 'Nexy\Slack\Client' class as 'Nexy\Slack\Client' service
+    Nexy\Slack\Client: ~
+
+    # Make alias 'Nexy\Slack\Client' to service 'nexy_slack.client', can be type-hinted
+    Nexy\Slack\Client: '@nexy_slack.client'
+
+    Nexy\Slack\Client:
+        alias: 'nexy_slack.client'
+
+    # -- Type-hining with name (as bind) ------------------------------------------------
+
+    App\Util\UppercaseTransformer: ~
+    App\Util\Rot13Transformer: ~
+
+    # the 'App\Util\UppercaseTransformer' service will be injected when an 'App\Util\TransformerInterface'
+    # type-hint for a '$shoutyTransformer' argument is detected.
+    App\Util\TransformerInterface $shoutyTransformer: '@App\Util\UppercaseTransformer'
+
+    # If the argument used for injection does not match, but the type-hint still matches,
+    # the 'App\Util\Rot13Transformer' service will be injected.
+    App\Util\TransformerInterface: '@App\Util\Rot13Transformer'
+
+    # -- Setting arguments manually ------------------------------------------------------
+
+    Nexy\Slack\Client:
+        class: Nexy\Slack\Client
+        arguments:
+            $endpoint: '%env(SLACK_WEBHOOK_BASEURL)%%env(SLACK_WEBHOOK_ENDPOINT_PATH)%'
+            # Set $logger to service with id 'monolog.logger.markdown'
+            $logger: '@monolog.logger.markdown'
+        tags:
+            # Adding tag 'monolog.logger' with 'channel' attribute
+            - { name: monolog.logger, channel: '%env(string:APP_NAME)%.client' }
+
+    # -- Explicit calling service methods -----------------------------------------------
+
+    logger.logger.stream.channels:
+        class: LoggerBundle\Service\StreamHandlerChannels
+        calls:
+            # short syntax
+            - setExcludeChannels: ['%env(json:LOGGER_EXCLUDE_CHANNELS)%']
+            # usual syntax
+            - method: setFormatter
+              arguments:
+                  - '@logger.formatter.console-file'
+
+    # -- Parent services ----------------------------------------------------------------
+
+    # Parent service
+    App\Repository\BaseDoctrineRepository:
+        abstract:  true
+        arguments: ['@doctrine.orm.entity_manager']
+        calls:
+            - [setLogger, ['@logger']]
+
+    # All attributes on the parent service are inherited by the child, except:
+    # `shared`, `abstract` and `tags`
+
+    # Child services
+    App\Repository\DoctrineUserRepository:
+        parent: App\Repository\BaseDoctrineRepository
+
+        # overrides the private setting of the parent service
+        public: true
+
+        # appends the '@app.username_checker' argument to the parent
+        # argument list
+        arguments: ['@app.username_checker']
+
+    App\Repository\DoctrinePostRepository:
+        parent: App\Repository\BaseDoctrineRepository
+
+        # overrides the first argument (using the special index_N key)
+        arguments:
+            index_0: '@doctrine.custom_entity_manager'
+
+    # -- Service decoration -------------------------------------------------------------
+
+    # End up with: $this->services[Foo::class] = new Bar(new Foo());
+    Foo: ~
+    Bar:
+        decorates: Foo
+        arguments: ['@Bar.inner']
+        decoration_on_invalid: ingnore
+
+    # Bar has to have: __construct(Foo $foo, ...)
+    #
+    # decoration_on_invalid (if decorated service no exists):
+    # - exception: A ServiceNotFoundException will be thrown telling that decorator's dependency is missing. (default)
+    # - ignore   : The container will remove the decorator.
+    # - null     : The container will keep the decorator service and will set the decorated one to null
+
+    # -- Real world example --
+    # Service 'doctrine.dbal.connection_factory' is decorated with
+    # Auxmoney\OpentracingDoctrineDBALBundle\DBAL\TracingConnectionFactory
+
+    auxmoney_opentracing.doctrine.dbal.connection_factory:
+        class: Auxmoney\OpentracingDoctrineDBALBundle\DBAL\TracingConnectionFactory
+        decorates: doctrine.dbal.connection_factory
+        arguments:
+            $connectionFactory: '@auxmoney_opentracing.doctrine.dbal.connection_factory.inner'
+
+    # -- Multiple decorators (with priorities) --
+    # higher priorities -> decorator will be applied earlier
+    #
+    # End up with: $this->services[Foo::class] = new Baz(new Bar(new Foo()));
+
+    Foo: ~
+
+    Bar:
+        decorates: Foo
+        decoration_priority: 5
+        arguments: ['@Bar.inner']
+
+    Baz:
+        decorates: Foo
+        decoration_priority: 1
+        arguments: ['@Baz.inner']
+
+    # -- Factories to create services ---------------------------------------------------
+
+    # Static factory
+    App\Email\NewsletterManager:
+        # Calls 'App\Email\NewsletterManagerStaticFactory::createNewsletterManager'
+        factory: ['App\Email\NewsletterManagerStaticFactory', 'createNewsletterManager']
+
+    # Non-static factory
+    App\Email\NewsletterManagerFactory: ~
+
+    App\Email\NewsletterManager:
+        # Calls 'App\Email\NewsletterManagerFactory->createNewsletterManager'
+        factory: ['@App\Email\NewsletterManagerFactory', 'createNewsletterManager']
+
+    # Non-static factory call with argtuments
+    App\Email\NewsletterManager:
+        factory:   ['@App\Email\NewsletterManagerFactory', createNewsletterManager]
+        # Calls App\Email\NewsletterManagerFactory->createNewsletterManager('@templating')
+        arguments: ['@templating']
+
+    # -- Anonymous service --------------------------------------------------------------
+
+    App\Foo:
+        arguments:
+            # declaring anonymous service
+            - !service
+                class: App\AnonymousBar
+                # Anonymous services do NOT inherit the definitions provided from the defaults
+                autowire: true
+                autoconfigure: true
+
+    # Anonymous factory service:
+    App\Foo:
+        factory: [ !service { class: App\FooFactory }, 'constructFoo' ]
+
+    # Auto-configure with _instanceof
+
+    # It acts as a default definition template, but only for services whose class matches a defined one.
+    _instanceof:
+        App\Domain\LoaderInterface:
+            public: true
+            tags: ['app.domain_loader']
+
+    # -- Alias Deprecation --------------------------------------------------------------
+
+    app.mailer:
+        alias: '@App\Mail\PhpMailer'
+        # this will display a generic deprecation message...
+        deprecated: true
+        # ...but you can also define a custom deprecation message
+        deprecated: 'The "%alias_id%" alias is deprecated. Do not use it anymore.'
+
+
+    # -- Lazy services ------------------------------------------------------------------
+
+    # Once you inject the service into another service, a virtual proxy with the same signature of
+    # the class representing the service should be injected. The actual class will be instantiated
+    # as soon as you try to interact with the service (e.g. call one of its methods).
+
+    # composer require symfony/proxy-manager-bridge
+    # config/services.yaml
+    App\Twig\AppExtension:
+        lazy: true
+
+-- end of services.yaml ---
+
+-- Service configuration lookup ---------------------------------------------------------
+
+List of services:
+sf debug:container               - show services list
+sf debug:container --tags        - show tags with associated services
+sf debug:container --tag "<tag>" - show services associated with tag
+
+State of service:
+sf debug:container --show-arguments <service-name>
+
+-- Output description --
+
+Service ID       ID "just"-string or a "FQCN"-string  (class/interface) to reference a service
+Class            Underlying class providing service
+Tags             Assosiated tags (maybe with addtional attributes)
+Public           Service can be get by calling $container->get()
+Synthetic        Service is confirurated at run-time and is set by object instance: $container->set('service', $service);
+Lazy             Service is really initialized at first usage (caller gets a wrapper object)
+Shared           Service is created only once 'shared' between callers (or created on every call)
+Abstract         Service is a parent of another and can't be used on it's own
+Autowired        Arguments of this service autowired by thier type-hint
+Autoconfigured   Tags are set automaticaly by service class interface inheritance
+Arguments        Constructor arguments of this service
+
+-- Sample --
+
+Service ID       Trace\EventSubscriber
+Class            Trace\EventSubscriber
+Tags             monolog.logger (channel: %env(string:APP_NAME)%.tracing)
+                 kernel.event_subscriber
+                 container.hot_path
+Public           no
+Synthetic        no
+Lazy             no
+Shared           yes
+Abstract         no
+Autowired        yes
+Autoconfigured   yes
+Arguments        Service(Auxmoney\OpentracingBundle\Service\Tracing)
+                 Service(monolog.logger.%env(string:APP_NAME)%.tracing)
+
+-- Autowiring --------------------------------------------------------------------------------
+
+The autowiring system looks for a service whose id exactly matches the type-hint
+
+sf debug:autowiring # See autowiring list
+
+class Service {
+    // Constructor autowiring
+    public function __construct(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+    }
+
+    // Autowiring will automatically call any method with the @required annotation above it,
+    // autowiring each argument.
+    /**
+     * @required
+     */
+    public function setLogger(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+    }
+}
+
+-- Параметры --
+
+Параметры которые можно использовать в настройках или в коде.
+
+Смотреть текущие параметры, так:
+sf debug:container --parameters
+
+Обычно хранятся в services, но не обязательно.
+Использование параметров не зависит от места определения.
+
+# .env contents
+DATABASE_URL=mysql://root:@127.0.0.1:3306/%DB_NAME%
+
+# services.yaml contents
+parameters:
+    env(DATABASE_URL): 'TEST'
+    DATABASE_URL     : '%env(resolve:DATABASE_URL)%'
+    DATABASE_URL2    : '%DATABASE_URL%'
+    DB_NAME          : 'the_spacebar'
+
+# result
+array:2 [
+  "env" => array:1 [
+    "DATABASE_URL" => "mysql://root:@127.0.0.1:3306/%DB_NAME%"
+  ]
+  "param" => array:4 [
+    "env(DATABASE_URL)" => "TEST"
+    "DATABASE_URL"  => "mysql://root:@127.0.0.1:3306/the_spacebar"
+    "DATABASE_URL2" => "mysql://root:@127.0.0.1:3306/the_spacebar"
+    "DB_NAME" => "the_spacebar"
+  ]
+]
+
+-- Константы из php и бинарные данные
+parameters:
+    global.constant.value  : !php/const GLOBAL_CONSTANT
+    my_class.constant.value: !php/const My_Class::CONSTANT_NAME
+    some_parameter         : !!binary VGhpcyBpcyBhIEJlbGwgY2hhciAH # encoded base64
+
+-- Коллекции
+
+parameters:
+    my_mailer.gateways: [mail1, mail2, mail3]
+
+    my_multilang.language_fallback:
+        en:
+            - en
+            - fr
+        fr:
+            - fr
+            - en

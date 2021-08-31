@@ -1,0 +1,43 @@
+csv-look() {
+    declare -a column_opts
+
+    # -- Arguments --
+    declare flags="Oztd:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            c) column_opts+=(-s ',') ;;
+            t) column_opts+=(-s $'\t') ;;
+            s) column_opts+=(-s $';') ;;
+            d) column_opts+=(-s "${OPTARG}") ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    [[ -z $column_opts ]] && column_opts+=(-s $'\t')
+
+    declare fr_csv="${params[0]}"
+    declare da_files="."
+
+    if [[ "${#params[@]}" == 0 ]] && [[ -t 0 ]]; then
+        find "$da_files/" \( -name '*.csv' -\) -printf '%f\n'
+        return
+    fi
+
+    if [[ -n $fr_csv ]]; then
+        declare fa_csv="$(find "$da_files/" -name "$fr_csv" -print -quit)"
+
+        [[ -z $fa_csv ]] && { warning "File $fr_csv not found!"; return 1; }
+
+        cat "$fa_csv" | column -t "${column_opts[@]}" | less -F
+
+    else
+        [[ -t 0 ]] && { warning 'Supply csv file or pipe'; return 1; }
+
+        column -t "${column_opts[@]}" | less -F
+    fi
+}
+
+complete -F _complete-cmd csv-look

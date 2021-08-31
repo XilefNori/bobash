@@ -1,0 +1,38 @@
+inst-docker() {
+    check-bin-not-exists docker && {
+        sudo apt-get update               &&
+        # sudo apt-get upgrade
+        sudo apt-get install docker.io    && # установка пакета
+        sudo systemctl start docker       && # старт сервиса
+        sudo systemctl enable docker         # добавление в сервиса автозапуск
+        # sudo reboot
+    }
+
+    declare user="$(whoami)"
+    if ! groups "$user" | grep docker -q; then
+        sudo usermod -aG docker "$user"
+    fi
+
+    docker --version
+}
+
+inst-docker-compose() {
+    check-bin-not-exists docker-compose && {
+        sudo curl -L "https://github.com/docker/compose/releases/download/1.23.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+    }
+
+    docker-compose --version
+}
+
+inst-docker-user() {
+    addgroup -g ${DEVELOPER_GID:-${DEVELOPER_UID:-1000}} developer && \
+    adduser  -u ${DEVELOPER_UID:-1000} developer -G developer -D   && \
+    passwd developer -u                                            && \
+    addgroup -S sudo && adduser developer sudo                     && \
+    echo '%sudo ALL=(ALL) ALL' >> /etc/sudoers
+
+    adduser www-data developer && \
+    adduser developer www-data
+}
+

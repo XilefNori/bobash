@@ -1,0 +1,38 @@
+javac -version
+
+# Компиляция и запуск обычный файлрв
+
+// Скомпилировать
+
+javac HelloWorld.java     // Скомпилировать файл HelloWorld.java
+javap -v HelloWorld.class // Просмотреть в текстовом виде содержимое HelloWorld.class
+
+// Запустить программу
+java HelloWorld                      # Указанно имя класса, java ищет файл с рассширением .class в текущей директории или в classpath
+java -classpath class_dir HelloWorld # Указанно имя класса, java ищет файл с рассширением .class в директории class_dir
+
+# JAR - файлы
+
+// Jar-ники просто zip-архивы со скомплиированными .class файлами и метаинформацией в папке META-INF/
+
+// Создать hw.jar c главным классом HelloWorld и файлам скопмилированными классами *.class
+jar cfe hw.jar HelloWorld HelloWorld.class
+
+// Посмотреть содержимое архива
+jar tf hw.jar
+
+// Распаковать архив
+jar xf hw.jar
+
+// Запустить jar-архив без указания главного класса (указан в Манифесте)
+java -jar hw.jar
+
+// Запустить jar-архив с указанием главного класса и заданием jar-ника в -classpath
+java -classpath hw.jar HelloWorld
+
+// Если есть сторонные классы их надо указывать в classpath и для компиляции и для запуска
+javac -classpath lib.jar HelloWorld.java
+java  -classpath hw.jar:lib.jar HelloWorld
+
+// Версия java-машины
+java -version

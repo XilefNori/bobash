@@ -1,0 +1,40 @@
+
+chown-my() {
+    sudo chown $(id -u):$(id -g) -R "$@"
+}
+
+complete -f chown-my
+
+chown-all() {
+    declare username="$1"
+
+    user="$(user-show "$username")"
+
+    user_id="$(echo "$user" | awk -F: '{ print $3 }')"
+    group_id="$(echo "$user" | awk -F: '{ print $4 }')"
+
+    sudo chown "$user_id:$group_id" -R "${@:2}"
+}
+
+function _chown-all() {
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare items="$(user-list)"
+
+        COMPREPLY=( $( compgen -W "${items}" -- "$cur" ) )
+        return 0
+    fi
+
+    if [[ ${COMP_CWORD} -gt 1 ]] ; then
+        COMPREPLY=( $( compgen -o filenames -A file -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+
+complete -F _chown-all chown-all

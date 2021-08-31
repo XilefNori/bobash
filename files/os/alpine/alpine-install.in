@@ -1,0 +1,71 @@
+INST_UPDATE=
+
+inst-update() {
+    [[ -z $I_AM_ROOT ]] && declare sudo=sudo || declare sudo=
+
+    if [[ $INST_UPDATE -eq 0 ]]; then
+        $sudo apk update && INST_UPDATE=1
+    fi
+}
+
+inst-install() {
+    [[ -z $I_AM_ROOT ]] && declare sudo=sudo || declare sudo=
+
+    $sudo apk add --no-cache "$@"
+}
+
+inst-utils-min() {
+    inst-update && {
+        inst-install bash bash-completion findutils jq less grep
+        inst-install sed gawk
+        inst-install colordiff
+        inst-install util-linux
+    }
+}
+
+inst-utils() {
+    inst-update && {
+        inst-utils-min
+
+        inst-install curl wget
+        inst-install vim mc
+        inst-install pv zip
+        inst-install ack
+    }
+}
+
+inst-ssh() {
+    inst-install openssh
+}
+
+inst-help() {
+    inst-update && {
+        inst-install mandoc man-db &&
+        inst-install man-pages
+
+        inst-install groff
+        inst-install pandoc
+        # inst-install mdocml-apropos
+    }
+}
+
+inst-sync() {
+    inst-update && {
+        inst-install unison
+        inst-install rsync
+    }
+}
+
+inst-git() {
+    inst-update && {
+        inst-install git &&
+        inst-install git-email &&
+        inst-install git-perl
+    }
+}
+
+inst-sudo() {
+    inst-update && {
+        inst-install sudo
+    }
+}

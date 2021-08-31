@@ -1,0 +1,133 @@
+INST_UPDATE=
+
+inst-root() {
+    if [[ $I_AM_ROOT -gt 0 ]]; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+inst-update()     { inst-root apt-get update        "$@"; }
+inst-autoremove() { inst-root apt-get autoremove -y "$@"; }
+inst-remove()     { inst-root apt-get remove     -y "$@"; }
+inst-install()    { inst-root apt-get install    -y "$@"; }
+
+inst-update-if() {
+    [[ $INST_UPDATE -eq 0 ]] && inst-update && INST_UPDATE=1
+}
+
+inst-yarn() {
+    curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+    curl -sL https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+
+    echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+
+    inst-update && inst-install yarn
+}
+
+inst-utils-min() {
+    inst-update-if && {
+        inst-install bash bash-completion findutils jq less grep
+        inst-install sed gawk
+        inst-install bsdmainutils util-linux
+    }
+}
+
+inst-utils() {
+    inst-update-if && {
+        inst-utils-min
+
+        inst-install curl wget
+        inst-install vim mc
+        inst-install make m4
+        inst-install colordiff
+        inst-install pv zip
+        inst-install ack
+        inst-install ncdu
+        inst-install screen tmux
+        inst-install parallel
+        inst-install moreutils # sponge
+        inst-install highlight
+    }
+}
+
+inst-ssh() {
+    inst-install openssh
+}
+
+inst-vpn() {
+    inst-install openvpn
+}
+
+inst-workstation() {
+    inst-utils
+
+    inst-vpn
+    inst-ssh
+    inst-help
+    inst-git
+}
+
+inst-help() {
+    inst-update-if && {
+        inst-install man man-db &&
+        inst-install man-pages
+
+        inst-install groff
+        inst-install pandoc
+        inst-install mdocml-apropos
+    }
+}
+
+inst-sync() {
+    inst-update-if && {
+        inst-install unison
+        inst-install rsync
+    }
+}
+
+inst-git() {
+    inst-update-if && {
+        inst-install git &&
+        inst-install git-email
+        # inst-install git-perl
+    }
+}
+
+inst-sudo() {
+    apt update && apt install -y sudo
+}
+
+inst-mysql() {
+    [[ -z $I_AM_ROOT ]] && declare sudo=sudo || declare sudo=
+
+    inst-update-if && {
+        inst-install mysql-server libapache2-mod-auth-mysql php5-mysql &&
+        $sudo mysql_install_db                   &&
+        $sudo /usr/bin/mysql_secure_installation
+    }
+}
+
+inst-php() {
+    declare version="$1"
+    [[ -z $version ]] && version=7.2
+
+    inst-update-if && {
+        inst-install php${version} php${version}-common php${version}-opcache php${version}-cli
+        inst-install php-fpm
+        inst-install php-curl php-json php-cgi php-gd php-zip php-mbstring
+        inst-install php-sqlite php-xml php-intl
+
+        # inst-install libapache2-mod-php
+        # inst-install php-mysql php-xdebug php-imagick php-mcrypt
+        # inst-install php-xmlrpc
+    }
+}
+
+inst-apache() {
+    inst-update-if &&  {
+        inst-install apache2
+    }
+}

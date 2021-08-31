@@ -1,0 +1,5 @@
+
+sshd-config() {
+    cat /etc/ssh/sshd_config | less
+}
+

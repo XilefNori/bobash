@@ -1,0 +1,8 @@
+lang-ru()  { LANG=ru_RU.UTF-8 ; locale; }
+lang-us()  { LANG=en_US.UTF-8 ; locale; }
+lang-c()   { LANG=C           ; locale; }
+lang()     { locale; }
+
+ru()  { LANG=ru_RU.UTF-8 "${@}"; }
+en()  { LANG=C           "${@}"; }
+

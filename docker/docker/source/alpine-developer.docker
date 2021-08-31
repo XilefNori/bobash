@@ -1,0 +1,21 @@
+RUN id -u www-data 2> /dev/null >&2 || { addgroup -g 82 -S www-data && adduser -u 82 -S www-data -G www-data; }
+
+RUN apk update
+
+RUN apk add --no-cache bash mc sudo git curl wget less grep bash-completion
+RUN apk add --no-cache openssh vim
+RUN apk add --no-cache man man-pages mdocml-apropos groff
+
+ARG DEVELOPER_UID
+ARG DEVELOPER_GID
+
+RUN addgroup -g ${DEVELOPER_GID:-${DEVELOPER_UID:-1000}} developer && \
+    adduser  -u ${DEVELOPER_UID:-1000} developer -G developer -D   && \
+    passwd developer -u                                            && \
+    addgroup -S sudo && adduser developer sudo                     && \
+    echo '%sudo ALL=(ALL) ALL' >> /etc/sudoers
+
+RUN adduser www-data developer
+
+RUN chmod u+s /bin/busybox
+

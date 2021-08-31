@@ -1,0 +1,22 @@
+
+winpid2pid() {
+    ps -Wa | awk "\$4 == $1  { printf \"%d\", \$1 }"
+}
+
+pkill() {
+    if [ $# -ne 1 ]; then
+        echo "Supply process name" >&2; return 1
+    fi
+
+    cmd_kill="/usr/bin/kill -f"
+    bin-exist 'taskkill' && cmd_kill="taskkill /F /T /PID"
+
+    for process_pid in `pid $1`; do
+    echo -n "Процесс: [`psl $process_pid`], "
+    if simple_ask "Убить?"; then
+        $cmd_kill $process_pid;
+    fi
+    done
+}
+
+alias kill='/usr/bin/kill -f'

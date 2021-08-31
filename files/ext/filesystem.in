@@ -1,0 +1,135 @@
+# Test is directory is empty
+dir_is_empty() { [[ -n $(find "$1" -maxdepth 0 -empty -type d -quit) ]]; }
+
+file_noext() { echo "${1%.*}"; }
+file_ext() { echo "${1##*.}"; }
+
+path_abs() {
+    [[ $# -ne 1 ]] && { echo "Usage: absolute_path RELATIVE_PATH"  >&2; return 1; }
+    [[ ! -e $1  ]] && { echo "File/directory [$1] does not exist! " >&2; return 1; }
+
+    declare path="$(cd $(dirname "$1") && pwd -P)/$(basename "$1")"
+    path="${path%/.*}"
+
+    echo "$path"
+}
+
+path_abs2() { [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"; }
+
+
+chmod-group-as-user() { chmod g=u "$@"; }
+chmod-fix()           { chmod u+rwX,go=rX "$@"; }
+
+ls-perms() {
+    [ -t 0 ] && stat -c '%a %n' "$@" || xargs stat -c '%a %n';
+}
+
+ln-all-to() {
+    for i in *; do ln -s "$PWD/$i" "$1"; done
+}
+
+file-path-abs() {
+    [[ $# -ne 1 ]] && { echo "Usage: absolute_path RELATIVE_PATH"  >&2; return 1; }
+    [[ ! -e $1  ]] && { echo "File/directory [$1] does not exist! " >&2; return 1; }
+
+    declare path="$(cd $(dirname "$1") && pwd -P)/$(basename "$1")"
+    echo "$path"
+}
+
+file-link-target() {
+    declare src="$1"
+    src="$(file-path-abs "$src")"
+    ! [[ -e "$src" ]] && { echo "Source [$src] not found! " >&2; return 1; }
+
+    declare target="$(readlink -f "$src" 2> /dev/null)";
+    [[ -z $target ]] && target="$({ ls -l "${src%/*}" | awk -F '-> ' '{ print $2 }'; } 2> /dev/null)"
+
+    [[ -z $target ]] && { echo "Target of source [$src] not found! "  >&2; return 1; }
+
+    echo "$target"
+}
+
+cd-link-target() {
+    declare target="$(file-link-target "$1")"
+
+    [[ -n $target ]] && cd "$target"
+}
+
+
+last-files() {
+    if [[ "$#" == 0 ]]; then
+        echo "Shows last n files"
+        echo 'Usase: last-files <n>' >&2
+        return
+    fi
+
+    find -print0 | xargs -0 ls -lt | head -n $1
+}
+
+which-ls() { ls -l "$(which "$1")"; }
+ls-which() { ls -l "$(which "$1")"; }
+
+complete -c which-ls ls-which
+
+WHICH_C_CMD='highlight -O xterm256  -s xoria256'
+
+which-c() {
+    declare cmd name path less ignore_binary
+
+    # -- Arguments --
+    declare flags="hlcvC:bB" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            b|B) ignore_binary=1 ;;
+            h) cmd="highlight -O xterm256  -s xoria256" ;;
+            c) cmd="cat" ;;
+            v) cmd="vim -R" ;;
+            C) cmd="${OPTARG}" ;;
+            l) less=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    name="${params[0]}"
+    path="$(which "$name")";
+
+    [[ $(file --mime "$(readlink -f $path)") =~ binary ]] && {
+        echo "$path - is a binary file"
+        [[ -z ${ignore_binary} ]] && return 1
+    }
+
+    highlight --version > /dev/null 2>&1 ||  {
+        echo 'Try install "highlight": sudo apt-get install highlight' >&2
+    }
+
+    [[ -z $cmd ]] && cmd="$WHICH_C_CMD"
+
+    [[ -n $less ]] && {
+        { $cmd "$path" 2> /dev/null|| cat "$path"; } | less
+    } || {
+        $cmd "$path" 2> /dev/null || cat "$path"
+    }
+
+    # { highlight -O xterm256  -s xoria256 "$path" | less; }
+
+}
+complete -c which-c
+
+# _which-c() {
+#     commands="$(compgen -c)"
+#
+#     cur="${COMP_WORDS[COMP_CWORD]}"
+#
+#     COMPREPLY=()
+#
+#     if [[ ${COMP_CWORD} -gt 0 ]] ; then
+#         COMPREPLY=( $( compgen -W "${commands}" -- "$cur" ) )
+#         return 0
+#     fi
+#
+#     return 0
+# }
+# complete -F _which-c which-c
+

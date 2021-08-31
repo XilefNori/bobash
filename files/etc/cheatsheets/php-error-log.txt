@@ -1,0 +1,70 @@
+---- List ------------------------------------------------------------------------------------------------------------
+
+error_log            NULL    PHP_INI_ALL   Name of the file where script errors should be logged
+error_reporting      NULL    PHP_INI_ALL   Error reporting level
+
+display_errors       "1"     PHP_INI_ALL   Printed error to user output or hide it from the user
+
+track_errors         "0"     PHP_INI_ALL   Last error message will always be present in the variable $php_errormsg.
+html_errors          "1"     PHP_INI_ALL   HTML tags in error messages
+
+log_errors           "0"     PHP_INI_ALL   (server-specific) Error messages logged to the server's error log or error_log
+log_errors_max_len   "1024"  PHP_INI_ALL   Set the maximum length of log_errors in bytes
+
+---- Details ---------------------------------------------------------------------------------------------------------
+
+-- error_log (string) --
+
+Name of the file where script errors should be logged. The file should be writable by the web server's user.
+If the special value syslog is used, the errors are sent to the system logger instead.
+On Unix, this means syslog(3) and on Windows NT it means the event log. See also: syslog().
+
+If this directive is not set, errors are sent to the SAPI error logger.
+For example, it is an error log in Apache or stderr in CLI. See also error_log().
+
+-- error_reporting (integer) --
+
+Set the error reporting level. The parameter is either an integer representing a bit field, or named constants.
+The error_reporting levels and constants are described in Predefined Constants, and in php.ini. To set at runtime,
+use the error_reporting() function. See also the display_errors directive.
+
+>= PHP 5.3 - the default value is E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED.
+<  PHP 5.3 - the default value is E_ALL & ~E_NOTICE & ~E_STRICT.
+
+E_ALL (integer)	 All errors and warnings, as supported, except of level E_STRICT prior to PHP 5.4.0.
+>= PHP 5.4 - 32767
+>= PHP 5.3 - 30719
+>= PHP 5.2 - 6143
+
+-- display_errors (string) --
+
+This determines whether errors should be printed to the screen as part of the output or if they should be hidden
+from the user. Value "stderr" sends the errors to stderr instead of stdout.
+
+Note:
+Although display_errors may be set at runtime (with ini_set()), it won't have any effect if the script has fatal
+errors. This is because the desired runtime action does not get executed.
+
+-- display_startup_errors (boolean) --
+
+Even when display_errors is on, errors that occur during PHP's startup sequence are not displayed.
+It's strongly recommended to keep display_startup_errors off, except for debugging.
+
+-- html_errors (boolean) --
+
+Turn off HTML tags in error messages. The new format for HTML errors produces clickable messages that direct
+the user to a page describing the error or function in causing the error. These references are affected by
+docref_root and docref_ext.
+
+-- log_errors (boolean) --
+
+Tells whether script error messages should be logged to the server's error log or error_log.
+This option is server-specific.
+
+-- log_errors_max_len (integer) --
+
+Set the maximum length of log_errors in bytes. In error_log information about the source is added. The default is 1024
+and 0 allows to not apply any maximum length at all. This length is applied to logged errors, displayed errors and
+also to $php_errormsg.
+
+When an integer is used, the value is measured in bytes. Shorthand notation, as described in this FAQ, may also be used.

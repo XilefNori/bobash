@@ -1,0 +1,32 @@
+result-cmd() {
+    declare result="$1"
+    declare error='ok'
+
+    if [[ $result -ne 0 ]]; then
+        case $result in
+            126) error='cant execute'             ;;
+            127) error='not found'                ;;
+            128) error='bad argument'             ;;
+  $((128 + 1 ))) error='hangup'                   ;;
+  $((128 + 2 ))) error='interrupt'                ;;
+  $((128 + 3 ))) error='quit'                     ;;
+  $((128 + 4 ))) error='illegal instruction'      ;;
+  $((128 + 5 ))) error='trace/breakpoint trap'    ;;
+  $((128 + 6 ))) error='abort'                    ;;
+  $((128 + 7 ))) error='emulation trap'           ;;
+  $((128 + 8 ))) error='arithmetic exception'     ;;
+  $((128 + 9 ))) error='killed'                   ;;
+  $((128 + 10))) error='bus error'                ;;
+  $((128 + 11))) error='segmentation fault'       ;;
+  $((128 + 12))) error='bad system call'          ;;
+  $((128 + 13))) error='broken pipe'              ;;
+  $((128 + 15))) error='terminated'               ;;
+  $((128 + 16))) error='user signal 1'            ;;
+  $((128 + 17))) error='user signal 2'            ;;
+            255) error='exit status out of range' ;;
+              *) error="$result"     ;;
+        esac
+    fi
+
+    echo -ne "$error"
+}

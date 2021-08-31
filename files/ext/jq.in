@@ -1,0 +1,113 @@
+# dos2unix: Binary symbol 0x1B found at line 2
+# dos2unix: Skipping binary file stdin
+
+if [[ $USYSTEM == 'cygwin' ]]; then
+    jq() { command jq "$@" ; }
+fi
+
+jq-view() {
+  jq . -C | less
+}
+
+jq-less() {
+  jq "$@" -C | less
+}
+
+jq-postman-request-list() {
+  jq -r '[.requests[] | {url: .url, method: .method, params: [.queryParams[].key]}] | sort_by(.url)[] | [.method, .url] | @tsv' "$@"
+}
+
+jq-postman-bearer-list() {
+    jq -c '.. | .bearer? // empty' "$@"
+}
+
+jq-fields-by-key() {
+    declare verbose column
+
+    # -- Arguments --
+    declare flags="AOvt" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A)                                 return ;;
+            v) verbose=1                              ;;
+			t) column=1                               ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+	declare keys=("${params[@]}")
+
+	declare dlm='\t'
+	declare jq='. | keys[] as $k | "%s"'
+
+	declare object_format="\\(\$k)"
+	declare key
+	for key in "${keys[@]}"; do
+		object_format="${object_format}$dlm\\(.[\$k] | .$key)"
+	done
+
+	jq=$(printf "$jq" "$object_format")
+
+	[[ -n $verbose ]] && echo "jq -r '$jq'" >&2
+
+	jq -r "$jq" | {
+       if [[ -n $column ]]; then column -t -s $'\t'; else cat; fi
+	}
+}
+
+jq-fields-of-array() {
+    declare verbose column
+
+    # -- Arguments --
+    declare flags="AOvt" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A)                                 return ;;
+            v) verbose=1                              ;;
+			t) column=1                               ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+	declare keys=("${params[@]}")
+
+	declare dlm='\t'
+
+	jq="$(printf '.[] | [ %s ] | @tsv' "$(echo ${keys[@]/#/.} | sed 's: :, :g')")"
+
+	[[ -n $verbose ]] && echo "jq -r '$jq'" >&2
+
+	jq -r "$jq" | {
+       if [[ -n $column ]]; then column -t -s $'\t'; else cat; fi
+	}
+}
+
+jq-array-select() { jq "[ .[] | select($1) ]"; }
+
+jq-add-composer-repo() {
+    # repo='{ "type": "git", "url": "..." }'
+    declare repo="$1"
+
+    cat composer.json | jq --indent 4 ".repositories += [$repo]" | sponge composer.json
+}
+
+
+jq-append-field() {
+    declare data="$1"
+    declare var="$2"
+    declare val="$3"
+
+    [[ -z $val ]] && val="${!var}"
+
+    if [[ -n $val ]]; then
+        data="$(echo "$data" | jq --arg value "${val}" ". + {"${var}": \$value}")"
+    fi
+
+    echo "$data"
+}

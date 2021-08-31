@@ -1,0 +1,21 @@
+video_wget_clip() {        
+    local start='1'
+    [ -n "$2" ] && start="$2"    
+    local end='1'
+    [ -n "$1" ] && end="$1"    
+
+    url="`getclip`"
+    url="`echo "$url" | sed -r 's/n=[[:digit:]]+/n=/'`"
+    list=( `eval echo "'$url'"{"$start".."$end"}` )
+    for i in "${list[@]}"; do
+    	echo "$i";
+    done
+    sleep 3
+    for i in "${list[@]}"; do
+    	if [ $? -eq 6 ]; then
+    		echo "Can't login"
+    		return
+		fi 
+	    wget --user-agent "Mozilla/5.0" --continue --timestamping --no-parent --timeout=10 "$i";
+    done
+}

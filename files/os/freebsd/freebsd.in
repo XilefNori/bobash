@@ -1,0 +1,4 @@
+unset -f mc
+
+unalias ls
+alias ls='ls -h'

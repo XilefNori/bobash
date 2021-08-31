@@ -1,0 +1,35 @@
+get-users() {
+    getent passwd | awk -F: '{ print $1 }' 
+}
+
+get-groups() {
+    getent group | awk -F: '{ print $1 }'  
+}
+
+get-group-members() {
+    group="$1"
+    
+    get-users | while IFS=: read name trash
+    do
+        groups "$name" | grep -q -w "$group" && echo "$name"
+    done
+}
+
+
+function complete-get-group-members() {
+    items="$(get-groups)"
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -gt 0 ]] ; then
+        COMPREPLY=( $( compgen -W "${items}" -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+
+complete -F complete-get-group-members get-group-members
+

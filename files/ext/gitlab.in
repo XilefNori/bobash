@@ -1,0 +1,792 @@
+GITLAB_PROJECTS_INCLUDE=  # 'regex-projects-include'
+GITLAB_PROJECTS_EXCLUDE=  # 'regex-projects-exclude'
+GITLAB_PROJECTS_PREFIX=   # 'projects-common-prefix'
+GITLAB_HOST=              # https://git.domain.com
+GITLAB_TOKEN=             # <your personal token>
+
+GITLAB_DEBUG_LEN=25
+GITLAB_DEBUG=0
+GITLAB_DIR=~/.bobash/config/gitlab
+GITLAB_API=api/v4
+GITLAB_CACHE_PROJECTS=3600
+GITLAB_CACHE_USERS=36000
+
+gitlab-token() {
+    [[ $1 = -O || $1 = -A ]] && return;
+
+    echo -n "$GITLAB_TOKEN"
+}
+
+gitlab-request() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare verbose look token method
+    declare -a parameters
+
+    # -- Arguments --
+    declare flags="AOvlp:t:m:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A)                                 return ;;
+            v) verbose=1                              ;;
+            m) method="${OPTARG}"                     ;;
+            l) look=1                                 ;;
+            t) token="${OPTARG}"                      ;;
+            p) parameters+=("${OPTARG}")              ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    [[ -z $token ]] && token="$(gitlab-token)"
+    [[ -z $token ]] && { echo "No token is set!" >&2; return 1; }
+    [[ -z $method ]] && method=GET
+
+    declare url="${params[0]}"
+    [[ -n $parameters ]] && {
+        declare str
+        declare i
+
+        for i in "${parameters[@]}"; do
+            str="$str&$i"
+        done
+
+        url="${url}?${str}"
+
+        [[ -n $verbose ]] && echo "$url" >&2
+    }
+
+    declare curl_opts=(-s);
+    curl_opts+=(--request "$method")
+    curl_opts+=(--header "Private-Token: $token")
+    curl_opts+=("$url")
+
+    [[ $GITLAB_DEBUG -gt 0 ]] && verbose=1
+
+    [[ -n $verbose ]] && echo curl "${curl_opts[@]}" >&2
+                              curl "${curl_opts[@]}" | {
+
+        if [[ -n $look ]]; then
+            jq-view
+        else
+            cat
+        fi
+    }
+}
+
+gitlab-get() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    [[ $1 = -O || $1 = -A ]] && return;
+
+    [[ -z $GITLAB_HOST ]] && { echo "No GITLAB_HOST is set!"; return 1; }
+
+    gitlab-request -m GET "${GITLAB_HOST}/${GITLAB_API}/$1" "${@:2}";
+}
+
+gitlab-post() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    [[ $1 = -O || $1 = -A ]] && return;
+
+    [[ -z $GITLAB_HOST ]] && { echo "No GITLAB_HOST is set!"; return 1; }
+
+    gitlab-request -m POST "${GITLAB_HOST}/${GITLAB_API}/$1" "${@:2}";
+}
+
+gitlab-projects() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare get_opts=()
+    declare parameters=()
+
+    # -- Arguments --
+    declare flags=":AOp:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"      ; return ;;
+            A)                                       return ;;
+            p) parameters="${OPTARG}"                       ;;
+
+            :) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+            ?) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+        esac; else
+            get_opts+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    [[ -z $parameters ]] && parameters="pagination=keyset&per_page=100&order_by=id&sort=asc"
+
+    [[ -n $parameters ]] && get_opts+=(-p "$parameters")
+
+    declare request="projects"
+
+    gitlab-get "$request" "${get_opts[@]}"
+}
+
+rawurlencode() {
+    local string="${1}"
+    local strlen=${#string}
+    local encoded=""
+    local pos c o
+
+    for (( pos=0 ; pos<strlen ; pos++ )); do
+     c=${string:$pos:1}
+     case "$c" in
+        [-_.~a-zA-Z0-9] ) o="${c}" ;;
+                      * ) printf -v o '%%%02x' "'$c"
+     esac
+     encoded+="${o}"
+    done
+
+    echo "${encoded}"  # You can either set a return variable (FASTER)
+}
+
+gitlab-.project-name() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare name="$1"
+    declare prefix=$GITLAB_PROJECTS_PREFIX
+
+    [[ -z $prefix        ]] && { echo "$name"; return; }
+    [[ $name =~ ^$prefix ]] && { echo "$name"; return; }
+
+    echo "$prefix$name"
+}
+
+ gitlab-project() { wrapper-simple    gitlab_project "$@"; }
+_gitlab-project() { _wrapper-complete gitlab_project     ; }
+complete -F _gitlab-project gitlab-project
+
+gitlab_project-view() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare get_opts=()
+    declare params
+
+    # -- Arguments --
+    declare flags=":AOp:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"      ; return ;;
+            A)                                       return ;;
+
+            p) get_opts+=(-p "${OPTARG}")                   ;;
+
+            :) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+            ?) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+
+    declare project="${params[0]}"
+    project="$(gitlab-.project-name "$project")"
+    project="$(rawurlencode "$project")"
+
+    gitlab-get "projects/$project" "${get_opts[@]}"
+}
+
+complete -F _gitlab-project_name gitlab_project-view
+
+gitlab_project-pipelines() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare get_opts=()
+    declare params ref look
+
+    # -- Arguments --
+    declare flags=":AOr:l" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"      ; return ;;
+            A)                                       return ;;
+
+            r) ref="${OPTARG}" ;;
+            l) look=1          ;;
+
+            :) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+            ?) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare project="${params[0]}"
+
+    project="$(gitlab-.project-name "$project")"
+    project="$(rawurlencode "$project")"
+
+    gitlab-get "projects/$project/pipelines" "${get_opts[@]}"  | {
+        if [[ -n $ref ]]; then
+            _gitlab-filter-pipeline-by-ref $ref
+        else
+            cat
+        fi
+    } | {
+        if [[ -n $look ]]; then
+            jq-view
+        else
+            cat
+        fi
+    }
+}
+
+jq-last-id() {
+    jq-fields-of-array id | sort -rn | head -n 1
+}
+
+gitlab_project-branches() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare get_opts=()
+    declare params ref
+
+    # -- Arguments --
+    declare flags=":AOC" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"      ; return ;;
+            A)                                       return ;;
+
+            C) cache=1 ;;
+
+            :) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+            ?) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare project="${params[0]}"
+    project="$(gitlab-.project-name "$project")"
+
+    declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME-$project" "gitlab")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME" -u "$GITLAB_CACHE_PROJECTS"
+    else
+        project="$(rawurlencode "$project")"
+
+        gitlab-get "projects/$project/repository/branches" | jq-fields-of-array name |
+            sort | tee "$fa_cache"
+    fi
+}
+
+complete -F _gitlab-project_name gitlab_project-branches
+
+gitlab-users() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    gitlab-get "users" "$@"
+}
+
+gitlab-user() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare username="$1"
+    shift 1
+
+    declare id
+
+    # -- Arguments --
+    declare flags=":AOi" OPTIND=1
+    declare -a get_opts
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"      ; return ;;
+            A)                                       return ;;
+
+            i) id=1 ;;
+
+            :) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+            ?) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+        esac; else
+            get_opts+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    gitlab-get "users" -p "username=$username" "${get_opts[@]}" | {
+        if [[ -n $id ]]; then jq-fields-of-array id; else cat; fi
+    }
+}
+
+gitlab_user-list() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare get_opts=()
+    declare params ref
+
+    # -- Arguments --
+    declare flags=":AOC" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"      ; return ;;
+            A)                                       return ;;
+
+            C) cache=1 ;;
+
+            :) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+            ?) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare parameters="pagination=keyset&per_page=100&order_by=id&sort=asc"
+
+    declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME" "gitlab")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME" -u "$GITLAB_CACHE_USERS"
+    else
+        declare page=1
+
+        while true; do
+            gitlab-get "users" -p "$parameters" -p "page=$page" > /tmp/gitlab-users
+            cat /tmp/gitlab-users
+
+            declare count=$(cat /tmp/gitlab-users | jq 'length')
+
+            [[ $count -eq 0 ]] && break
+
+            ((page++))
+
+        done | tee "$fa_cache"
+    fi | jq-fields-of-array username | sort
+}
+
+_gitlab-username() {
+    [[ ${COMP_CWORD} -ne 1 ]] && return
+
+    COMPREPLY=($( compgen -W "$(gitlab_user-list -C)" -- "${COMP_WORDS[COMP_CWORD]}" ));
+}
+
+complete -F _gitlab-username gitlab-user gitlab-user-id
+
+gitlab_project-pipeline() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare get_opts=()
+    declare params
+
+    declare project="$1"
+    declare pipeline="$2"
+
+    project="$(gitlab-.project-name "$project")"
+    project="$(rawurlencode "$project")"
+
+    gitlab-get "projects/$project/pipelines/$pipeline" "$@"
+}
+
+gitlab_project-pipeline-jobs() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare get_opts=()
+    declare params
+
+    declare project="$1"
+    declare pipeline="$2"
+
+    project="$(gitlab-.project-name "$project")"
+    project="$(rawurlencode "$project")"
+
+    gitlab-get "projects/$project/pipelines/$pipeline/jobs" "$@"
+}
+
+complete -F _gitlab-project-name          gitlab_project-pipelines
+complete -F _gitlab-project-pipeline      gitlab_project-pipeline
+complete -F _gitlab-project-pipeline      gitlab_project-pipeline-jobs
+
+gitlab_project-pipeline() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare get_opts=()
+    declare params
+
+    declare project="$1"
+    declare pipeline="$2"
+
+    project="$(gitlab-.project-name "$project")"
+    project="$(rawurlencode "$project")"
+
+    gitlab-get "projects/$project/pipelines/$pipeline" "$@"
+}
+
+gitlab_project-job() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare get_opts=()
+    declare params retry
+
+    # -- Arguments --
+    declare flags=":AOR" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"      ; return ;;
+            A)                                       return ;;
+
+            R) retry=1 ;;
+
+            :) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+            ?) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare project="${params[0]}"
+    declare job="${params[1]}"
+
+    project="$(gitlab-.project-name "$project")"
+    project="$(rawurlencode "$project")"
+
+    if [[ -n $retry ]]; then
+        gitlab-post "projects/$project/jobs/$job/retry" "${get_opts[@]}"
+    else
+        gitlab-get "projects/$project/jobs/$job"        "${get_opts[@]}"
+    fi
+}
+
+gitlab_project-last-job() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare project="$1"
+    declare ref="$2"
+    declare job_name="$3"
+
+    declare pipeline_id=$(gitlab_project-pipelines "$project" -r "$ref" | jq-last-id)
+    declare job_id=$(gitlab_project-pipeline-jobs "$project" "$pipeline_id" | jq-array-select ".name == \"$job_name\"" | jq-last-id)
+
+    gitlab_project-job "$project" "$job_id" "$@"
+}
+
+complete -F _gitlab-project-ref-job_name gitlab_project-last-job
+
+
+ gitlab-web() { wrapper-simple    gitlab_web "$@"; }
+_gitlab-web() { _wrapper-complete gitlab_web     ; }
+complete -F _gitlab-web gitlab-web
+
+gitlab_web-project-pipelines() {
+    declare project="$1"
+    declare project="$(gitlab-.project-name "$project")"
+
+    echo "firefox \"$GITLAB_HOST/$project/pipelines\"" >&2
+    firefox "$GITLAB_HOST/$project/pipelines"
+}
+
+complete -F _gitlab-project_name gitlab_web-project-pipelines
+
+gitlab-clone() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    [[ $1 = -O || $1 = -A ]] && return;
+
+    declare projects=("$@")
+
+    if [[ "${#projects[@]}" -eq 0 ]]; then
+        declare line
+        # declare IFS
+        # IFS=
+        while read -r line; do
+            [[ -z $line ]] && continue  # break if line is empty
+            projects+=("$line")
+        done
+    fi
+
+    declare name
+    declare header
+
+    for name in "${projects[@]}"; do
+        declare project="$(gitlab-.project-name "$name")"
+
+        if [[ ! -d "$name" ]]; then
+            declare origin="$(gitlab_project-view $project | jq -r '.ssh_url_to_repo')"
+
+            header="- Clonning '$name' from '$origin'"; echo "$header"
+            git clone "$origin" "$name"
+        else
+            (
+                cd "$name" >& /dev/null
+                declare origin="$(git ls-remote --get-url origin)"
+
+                header="- Fetching '$name' from '$origin'"; echo "$header"
+
+                git fetch
+            )
+        fi
+
+        # echo "${header//?/-}"
+    done
+}
+
+gitlab-fetch() {
+	gitlab-sync -qqf
+}
+
+gitlab-sync() {
+    declare quite=0 fetch dir
+
+    # -- Arguments --
+    declare flags="AOqf" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"      ; return ;;
+            A)                                       return ;;
+
+            d) dir="${OPTARG}"    ;;
+            q) quite=$((quite+1)) ;;
+            f) fetch=1            ;;
+
+            :) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+            ?) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare projects
+            projects=($(gitlab-projects-list -n)) || return 1
+    declare project="${projects[0]}"
+
+    declare action
+    if [[ -d "${project%%/*}" ]]; then
+        action=Fetching
+
+        printf "Ready to ${LB}fetch${NC} [%d] projects\n" "${#projects[@]}"
+    else
+        [[ -n $fetch ]] && { echo "Fetching mode is set, but directory [${project%%/*}] not exits!" ; return 1; }
+
+        action=Clonning
+
+        printf "Ready to ${LG}clone${NC} [%d] projects\n" "${#projects[@]}"
+    fi
+
+    if [[ $quite -lt 2 ]]; then
+        simple_ask "Proceed?" || { echo "$action canceled"; return 1; }
+    fi
+
+    declare start=$(date '+%s')
+
+    declare project
+    for project in "${projects[@]}"; do
+        [[ $quite -gt 0 ]] && {
+            echo -n '.'
+            declare fa_log="$GITLAB_DIR/clone-${project//\//_}.err"
+        }
+
+        gitlab-clone "$project" |& {
+            if [[ $quite -gt 0 ]]; then
+                cat > "$fa_log"
+            else
+                cat
+            fi
+        }
+
+        declare result="${PIPESTATUS[0]}"
+
+        if [[ $quite -gt 0 ]]; then
+            [[ $result -ne 0 ]] && {
+                echo
+                echo "${DR}--- [ $project ] ERROR ($(result-cmd $result)) ---${NC}"
+                echo
+
+                cat "$fa_log"
+                echo
+            }
+
+            rm -f "$fa_log"
+        fi
+    done
+
+    time-show "$action done" "$start"
+}
+
+_gitlab-clone() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare opts="$(gitlab-projects-list -CN)";
+
+    COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+    return 0
+}
+
+complete -F _gitlab-clone gitlab-clone
+
+_gitlab-filter-pipeline-by-ref() { jq-array-select ".ref >= \"$1\""; }
+
+gitlab-projects-url() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    [[ $1 = -O || $1 = -A ]] && return;
+
+    gitlab-projects | jq -r '.[] | {url: .ssh_url_to_repo} | .url'
+}
+
+join_by() {
+    declare d=$1; shift; echo -n "$1"; shift; printf "%s" "${@/#/$d}";
+}
+
+gitlab-projects-list() {
+    [[ $GITLAB_DEBUG -gt 0 ]] && printf "DEBUG: %-${GITLAB_DEBUG_LEN}s [%s]\n" "$FUNCNAME" "$*" >&2
+
+    declare cache table fields prefixed all
+
+    # -- Arguments --
+    declare flags="AOtConNi" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"      ; return ;;
+            A)                                       return ;;
+
+            a) all=1 ;;
+            C) cache=1 ;;
+            t) table=1 ;;
+
+            o) fields+=(3) ;;
+            n) fields+=(2) ;;
+            N) fields+=(2) ; prefixed=1 ;;
+            i) fields+=(1) ;;
+
+            :) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+            ?) [[ -n ${OPTARG} ]] && get_opts+=("-${OPTARG}") ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME" -u "$GITLAB_CACHE_PROJECTS"
+    else
+        gitlab-projects | jq -r '.[] | [ .id, .path_with_namespace, .ssh_url_to_repo ] | @tsv' |  sort -k2 | tee "$fa_cache"
+    fi | {
+        if [[ -z $all ]] && [[ -n $GITLAB_PROJECTS_INCLUDE || -n $GITLAB_PROJECTS_EXCLUDE ]]; then
+            if [[ -n $GITLAB_PROJECTS_INCLUDE ]]; then grep -P    "$GITLAB_PROJECTS_INCLUDE"; else cat; fi |
+            if [[ -n $GITLAB_PROJECTS_EXCLUDE ]]; then grep -P -v "$GITLAB_PROJECTS_EXCLUDE"; else cat; fi
+        else
+            cat
+        fi
+    } | {
+         if [[ -n $fields ]]; then
+             awk "{ print $(join_by , "${fields[@]/#/$}") }" | {
+                if [[ -n $GITLAB_PROJECTS_PREFIX && -n $prefixed ]]; then
+                    sed "s:^$GITLAB_PROJECTS_PREFIX::"
+                else
+                    cat
+                fi
+             }
+
+
+         else
+             cat
+         fi
+    } | {
+        if [[ $table ]]; then
+            column -t | less
+        else
+            cat
+        fi
+    }
+}
+
+_gitlab-project-pipeline() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare opts="$(gitlab-projects-list -CN)";
+
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0
+    fi
+
+    if [[ ${COMP_CWORD} -eq 2 ]] ; then
+        declare project="${COMP_WORDS[1]}"
+        declare opts="$(gitlab_project-pipelines "$project" | jq-fields-of-array id)";
+
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0
+    fi
+
+    return 0
+}
+
+_gitlab-project-ref-job_name() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare opts="$(gitlab-projects-list -CN)";
+
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0
+    fi
+
+    if [[ ${COMP_CWORD} -eq 2 ]] ; then
+        declare project="${COMP_WORDS[1]}"
+        declare opts="$(gitlab_project-branches "$project" -C)";
+
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0
+    fi
+
+    if [[ ${COMP_CWORD} -eq 3 ]] ; then
+        declare project="${COMP_WORDS[1]}"
+        declare ref="${COMP_WORDS[2]}"
+
+        declare pipeline_id="$(gitlab_project-pipelines "$project" -r "$ref" | jq-last-id)"
+        declare job_names=( $(gitlab_project-pipeline-jobs "$project" "$pipeline_id" | jq-fields-of-array name | sort -u | tr ' ' '-') )
+
+        declare items=($( compgen -W "${job_names[*]}" -- "${cur/ /-}"))
+        declare i
+        for i in "${items[@]}"; do
+            COMPREPLY+=("${i/-/\\ }");
+        done
+
+        return 0
+    fi
+
+    return 0
+}
+
+_gitlab-project_name() {
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        COMPREPLY=($( compgen -W "$(gitlab-projects-list -CN)" -- "${COMP_WORDS[COMP_CWORD]}" ));
+    fi
+}
+
+
+# ----------------------------------------------------------------------------------
+
+gitlab-cfg()  {  var-cfg "GITLAB" "$@"; }
+_gitlab-cfg() { _var-cfg "gitlab-cfg" ; }
+complete -F _gitlab-cfg gitlab-cfg
+
+ gitlab-.complete() {  wrapper-complete-cmd  gitlab "$@" ; }
+_gitlab-.complete() { _wrapper-complete-cmd  gitlab      ; }
+complete -F _gitlab-complete gitlab-complete
+
+ gitlab() { wrapper-help       gitlab "$@"; }
+_gitlab() { _wrapper-complete  gitlab     ; }
+complete -F _gitlab gitlab
+

@@ -1,0 +1,131 @@
+# https://wiki.archlinux.org/index.php/Color_Bash_Prompt
+
+# Colors ---------------------------------------------------------------------
+
+DRED=$'\E[0;31m'    ; DR=$'\E[0;31m' # RED
+DGREEN=$'\E[0;32m'  ; DG=$'\E[0;32m' # GREEN
+DYELLOW=$'\E[0;33m' ; DY=$'\E[0;33m' # YELLOW
+DBLUE=$'\E[0;34m'   ; DB=$'\E[0;34m' # BLUE
+DPURPLE=$'\E[0;35m' ; DP=$'\E[0;35m' # PURPLE
+DCYAN=$'\E[0;36m'   ; DC=$'\E[0;36m' # CYAN
+DWHITE=$'\E[0;37m'  ; DW=$'\E[0;37m' # WHITE
+
+if [[ $OS =~ Windows ]]; then
+	LRED=$'\E[1;31m'    ; LR=$'\E[1;31m' # RED
+	LGREEN=$'\E[1;32m'  ; LG=$'\E[1;32m' # GREEN
+	LYELLOW=$'\E[1;33m' ; LY=$'\E[1;33m' # YELLOW
+	LBLUE=$'\E[1;34m'   ; LB=$'\E[1;34m' # BLUE
+	LPURPLE=$'\E[1;35m' ; LP=$'\E[1;35m' # PURPLE
+	LCYAN=$'\E[1;36m'   ; LC=$'\E[1;36m' # CYAN
+	LWHITE=$'\E[1;37m'  ; LW=$'\E[1;37m' # WHITE
+else
+	LRED=$'\E[0;91m'    ; LR=$'\E[0;91m' # RED
+	LGREEN=$'\E[0;92m'  ; LG=$'\E[0;92m' # GREEN
+	LYELLOW=$'\E[0;93m' ; LY=$'\E[0;93m' # YELLOW
+	LBLUE=$'\E[0;94m'   ; LB=$'\E[0;94m' # BLUE
+	LPURPLE=$'\E[0;95m' ; LP=$'\E[0;95m' # PURPLE
+	LCYAN=$'\E[0;96m'   ; LC=$'\E[0;96m' # CYAN
+	LWHITE=$'\E[0;97m'  ; LW=$'\E[0;97m' # WHITE
+fi
+
+BRED=$'\E[1;31m'    ; BR=$'\E[1;31m' # RED
+BGREEN=$'\E[1;32m'  ; BG=$'\E[1;32m' # GREEN
+BYELLOW=$'\E[1;33m' ; BY=$'\E[1;33m' # YELLOW
+BBLUE=$'\E[1;34m'   ; BB=$'\E[1;34m' # BLUE
+BPURPLE=$'\E[1;35m' ; BP=$'\E[1;35m' # PURPLE
+BCYAN=$'\E[1;36m'   ; BC=$'\E[1;36m' # CYAN
+BWHITE=$'\E[1;37m'  ; BW=$'\E[1;37m' # WHITE
+
+NCOLOR=$'\E[0m'     ; NC=$'\E[0m'    # NOCOLOR (все атрибуты по умолчанию)
+
+BOLD='\033[1m'        #  ${BOLD}       # жирный шрифт (интенсивный цвет)
+DBOLD='\033[2m'       #  ${DBOLD}      # полу яркий цвет (тёмно-серый, независимо от цвета)
+NBOLD='\033[22m'      #  ${NBOLD}      # установить нормальную интенсивность
+UNDERLINE='\033[4m'   #  ${UNDERLINE}  # подчеркивание
+NUNDERLINE='\033[4m'  #  ${NUNDERLINE} # отменить подчеркивание
+BLINK='\033[5m'       #  ${BLINK}      # мигающий
+NBLINK='\033[5m'      #  ${NBLINK}     # отменить мигание
+INVERSE='\033[7m'     #  ${INVERSE}    # реверсия (знаки приобретают цвет фона, а фон -- цвет знаков)
+NINVERSE='\033[7m'    #  ${NINVERSE}   # отменить реверсию
+BREAK='\033[m'        #  ${BREAK}      # все атрибуты по умолчанию
+
+COLOR_INFO="$LWHITE"
+COLOR_ALERT="$LRED"
+COLOR_WARNING="$DYELLOW"
+COLOR_CONFIRM="$DGREEN"
+COLOR_ERROR="$DRED"
+
+# Another colors -----------------------------------------------------------------
+
+# Reset
+Color_Off='\e[0m'       # Text Reset
+
+# Regular Colors
+Black='\e[0;30m'        # Black
+Red='\e[0;31m'          # Red
+Green='\e[0;32m'        # Green
+Yellow='\e[0;33m'       # Yellow
+Blue='\e[0;34m'         # Blue
+Purple='\e[0;35m'       # Purple
+Cyan='\e[0;36m'         # Cyan
+White='\e[0;37m'        # White
+
+# Bold
+BBlack='\e[1;30m'       # Black
+BRed='\e[1;31m'         # Red
+BGreen='\e[1;32m'       # Green
+BYellow='\e[1;33m'      # Yellow
+BBlue='\e[1;34m'        # Blue
+BPurple='\e[1;35m'      # Purple
+BCyan='\e[1;36m'        # Cyan
+BWhite='\e[1;37m'       # White
+
+# Underline
+UBlack='\e[4;30m'       # Black
+URed='\e[4;31m'         # Red
+UGreen='\e[4;32m'       # Green
+UYellow='\e[4;33m'      # Yellow
+UBlue='\e[4;34m'        # Blue
+UPurple='\e[4;35m'      # Purple
+UCyan='\e[4;36m'        # Cyan
+UWhite='\e[4;37m'       # White
+
+# Background
+On_Black='\e[40m'       # Black
+On_Red='\e[41m'         # Red
+On_Green='\e[42m'       # Green
+On_Yellow='\e[43m'      # Yellow
+On_Blue='\e[44m'        # Blue
+On_Purple='\e[45m'      # Purple
+On_Cyan='\e[46m'        # Cyan
+On_White='\e[47m'       # White
+
+# High Intensity
+IBlack='\e[0;90m'       # Black
+IRed='\e[0;91m'         # Red
+IGreen='\e[0;92m'       # Green
+IYellow='\e[0;93m'      # Yellow
+IBlue='\e[0;94m'        # Blue
+IPurple='\e[0;95m'      # Purple
+ICyan='\e[0;96m'        # Cyan
+IWhite='\e[0;97m'       # White
+
+# Bold High Intensity
+BIBlack='\e[1;90m'      # Black
+BIRed='\e[1;91m'        # Red
+BIGreen='\e[1;92m'      # Green
+BIYellow='\e[1;93m'     # Yellow
+BIBlue='\e[1;94m'       # Blue
+BIPurple='\e[1;95m'     # Purple
+BICyan='\e[1;96m'       # Cyan
+BIWhite='\e[1;97m'      # White
+
+# High Intensity backgrounds
+On_IBlack='\e[0;100m'   # Black
+On_IRed='\e[0;101m'     # Red
+On_IGreen='\e[0;102m'   # Green
+On_IYellow='\e[0;103m'  # Yellow
+On_IBlue='\e[0;104m'    # Blue
+On_IPurple='\e[0;105m'  # Purple
+On_ICyan='\e[0;106m'    # Cyan
+On_IWhite='\e[0;107m'   # White

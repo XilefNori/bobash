@@ -1,0 +1,26 @@
+ip4-show() {
+	# | awk '{ print $2 }'
+	ifconfig "$@" | grep 'inet\b' | sed 's/^\s*//' | {
+		 column -t 2> /dev/null || cat
+	}
+}
+
+ip6-show() {
+	# | awk '{ print $2 }'
+	ifconfig "$@" | grep 'inet6' | sed 's/^\s*//' | {
+		 column -t 2> /dev/null || cat
+	}
+}
+
+# Net Tools
+netstat() { command netstat -nao "$@"; }
+port-list() { cat /etc/services; }
+
+
+ip4-list() {
+    if type ifconfig &> /dev/null; then
+        ip4-show  | grep -oP 'inet\s+\d+.\d+.\d+.\d+' | grep -oP '\d+.\d+.\d+.\d+'
+    elif type ipconfig &> /dev/null; then
+        ipconfig | grep 'IPv4' | grep -oP '\d+.\d+.\d+.\d+'
+    fi
+}

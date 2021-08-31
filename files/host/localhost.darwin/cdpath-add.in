@@ -1,0 +1,4 @@
+cdpath-readd .. .
+
+cdpath-add   -a $HOME/projects
+cdpath-add   -a $HOME/projects/study

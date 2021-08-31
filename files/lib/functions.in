@@ -1,0 +1,41 @@
+func-list() { declare -F | sed 's/declare -f //'; }
+
+func-exists() { declare -f "$1" > /dev/null; }
+
+func-echo() {
+    type "$1" | tail -n+2
+}
+
+func-echo-call() {
+    declare func="$1"
+    declare safename="$(echo "$func" | tr '-' '_')"
+
+    declare p
+    declare params=()
+    for p in "${@:2}"; do
+        params+=("'$p'")
+    done
+
+    {
+        # echo -n "function "
+        type "$func" | tail -n+2
+        echo "$func" "${params[@]}"
+    } | sed "s:$func:$safename:"
+}
+
+_func-echo-call() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare commands="$(declare -F | sed 's/declare -f //')";
+
+        COMPREPLY=( $( compgen -W "$commands" -- "$cur" ) )
+    fi
+
+    return 0
+}
+
+complete -F _func-echo-call func-echo-call
+

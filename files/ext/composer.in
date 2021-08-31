@@ -1,0 +1,564 @@
+export COMPOSER_DEBUG=0
+
+export COMPOSER_DISCARD_CHANGES=true
+export COMPOSER_MEMORY_LIMIT=2048M
+
+export COMPOSER_BIN
+
+_composer-find-bin() {
+    declare force
+
+    # -- Arguments --
+    declare flags="f" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            f) force=1 ;;
+        esac; }
+    done
+
+    [[ -s "$COMPOSER_BIN" && -z $force ]] && { echo "$COMPOSER_BIN"; return; }
+
+    {
+        which composer      && COMPOSER_BIN="$(which composer)"
+        which composer.phar && COMPOSER_BIN="$(which composer.phar)"
+
+    } > /dev/null 2>&1
+
+    [[ -s "$COMPOSER_BIN" ]] && echo "$COMPOSER_BIN" || { echo "Not found composer" >&2; return 1; }
+}
+
+COMPOSER_BIN="$(_composer-find-bin 2> /dev/null)"
+
+[[ -z "$COMPOSER_BIN" || ! -e "$COMPOSER_BIN" ]] && return 1
+
+# ---------------------------------------------------------------------------------------
+
+ composer() { wrapper-help-command  composer _composer-bin "$@" ; }
+_composer() { _wrapper-complete     composer _composer-bin-complete -C; }
+complete -F _composer composer
+
+ composer-cfg() {  var-cfg "COMPOSER" "$@"; }
+_composer-cfg() { _var-cfg "composer-cfg" ; }
+complete -F _composer-cfg composer-cfg
+
+# ---------------------------------------------------------------------------------------
+
+COMPOSER_XDEBUG_OFF=1
+
+_composer-bin() {
+    declare bin="$COMPOSER_BIN"
+    if [[ $(which php) != /usr/bin/php ]]; then
+        bin="$(filepath "$bin";)"
+    fi
+
+    [[ $COMPOSER_DEBUG -gt 0 ]] && echo php "$bin" "$@" >&2
+
+    if [[ $COMPOSER_XDEBUG_OFF -gt 0 ]]; then
+        XDEBUG_CONFIG= php "$bin" "$@"
+    else
+                       php "$bin" "$@"
+    fi
+}
+
+# composer() {
+#     if [[ -n $COMPOSER_XDEBUG_OFF ]]; then
+#         XDEBUG_CONFIG= php "$COMPOSER_BIN" "$@"
+#     else
+#                        php "$COMPOSER_BIN" "$@"
+#     fi
+# }
+
+composer-xdebug-on() {
+    COMPOSER_XDEBUG_OFF=0
+}
+
+composer-xdebug-off() {
+    COMPOSER_NO_XDEBUG=1
+}
+
+composer-json-modify() {
+    declare indent
+    # -- Arguments --
+    declare flags="i:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+       if getopts "$flags" flag; then case $flag in
+            i) indent="${OPTARG}" ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    [[ -z $params ]] && params=(.)
+    [[ -z $indent ]] && indent=4
+
+    declare da_root
+            da_root="$(_composer-root)" || return 1
+
+    cat "$da_root/composer.json" | jq --indent "$indent" "${params[@]}" | sponge "$da_root/composer.json"
+}
+
+composer-home() {
+    _composer-bin config home "$@"
+}
+
+composer-config-list() {
+    _composer-bin config "$@" --list
+}
+
+composer-json-add-auto-script() {
+    # script='{"exception:gen-list": "symfony-cmd"}'
+    declare script="$1"
+
+    composer-modify-json ".scripts.\"auto-scripts\" |= . + $script"
+}
+
+composer-json-add-repo() {
+    # repo='{ "type": "git", "url": "http://..." }'
+    declare repo="$1"
+
+    composer-modify-json ".repositories += [$repo]"
+}
+
+composer-json-show-name() {
+    composer-json-show .name -r
+}
+
+composer-json-show() {
+   declare da_root
+           da_root="$(_composer-root)" || return 1
+
+    cat "$da_root/composer.json" | jq "$@"
+}
+
+composer-install-opts-on() {
+    [[ -n "$COMPOSER_INSTALL_OPTS_SAVED" ]] && COMPOSER_INSTALL_OPTS=("${COMPOSER_INSTALL_OPTS_SAVED[@]}")
+
+    composer-cfg "$@"
+}
+
+composer-install-opts-off() {
+    [[ -n "$COMPOSER_INSTALL_OPTS" ]] && {
+        COMPOSER_INSTALL_OPTS_SAVED=("${COMPOSER_INSTALL_OPTS[@]}")
+        COMPOSER_INSTALL_OPTS=()
+    }
+
+    composer-cfg "$@"
+}
+
+composer-opts-on()  { composer-install-opts-on "$@"; }
+composer-opts-off() { composer-install-opts-off "$@"; }
+
+composer-opts-on() {
+    [[ -n "$COMPOSER_INSTALL_OPTS_SAVED" ]] && COMPOSER_INSTALL_OPTS=("${COMPOSER_INSTALL_OPTS_SAVED[@]}")
+
+    composer-cfg "$@"
+}
+
+COMPOSER_INSTALL_OPTS=(--ignore-platform-reqs --no-scripts)
+# export COMPOSER_DISCARD_CHANGES=true
+
+composer-install-ignore() {
+    _composer-bin install --ignore-platform-reqs --no-scripts
+}
+
+composer-require-ignore() {
+    _composer-bin require --ignore-platform-reqs --no-scripts "$@"
+}
+
+composer-update-ignore() {
+    _composer-bin update --ignore-platform-reqs --no-scripts "$@"
+}
+
+composer-global-install() {
+    [[ ! -f $COMPOSER_BIN ]] && { echo "Install composer!"; return 1; }
+
+    declare quite
+    # -- Arguments --
+    declare flags="q" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+       if getopts "$flags" flag; then case $flag in
+            q) quite=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare package_name="${params[0]}"
+
+    declare package_path=$(_composer-bin global show --path "$package_name" 2> /dev/null | awk '{print $2}')
+
+    if [[ -n $package_path ]]; then
+        [[ -z $quite ]] && echo "Package $package_name already installed at [$package_path]" >&2
+
+        return 0
+    fi
+
+    _composer-bin global require "$package_name"
+}
+
+composer-require-again() {
+    declare package="$1"
+    shift 1
+
+    echo "-- Removing package $package -- "
+    _composer-bin remove "$package"
+    echo "-- Requiring package $package $* -- "
+    _composer-bin require "$package" "$@"
+}
+
+composer-require-remove() {
+    declare package="$1"
+    shift 1
+
+    declare path="$(composer-path "$package")"
+
+    [[   -z "$path" ]] && { echo "No path for package [$package] !"; return 1; }
+    [[ ! -d "$path" ]] && { echo "Path [$path] is not dir !"       ; return 1; }
+
+    echo "-- Deleting $package --"
+    echo "Deleting path [$path]"
+    rm -rf "$path"
+
+    echo "-- Requiring package $package $* -- "
+    _composer-bin require "$package" "$@"
+}
+
+composer-add-components() {
+    declare composer_opts=()
+
+    # -- Arguments --
+    declare flags="nSPAad" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+       if getopts "$flags" flag; then case $flag in
+            n) composer_opts+=(--no-interaction) ;;
+            S) composer_opts+=(--no-scripts) ;;
+            P) composer_opts+=(--ignore-platform-reqs) ;;
+            A) composer_opts+=(--no-ansi) ;;
+            a) composer_opts+=(--ansi) ;;
+            d) composer_opts+=(--dev) ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    for i in "${params[@]}"; do
+        composer-add-component "$i" "${composer_opts[@]}"
+    done
+}
+
+composer-add-component() {
+    declare names=("$@")
+
+    echo
+    echo "== Adding component: [${names[@]}] =="
+    echo
+
+    declare da_root
+    da_root="$(_composer-root)" || return 1
+
+    [[ -d $da_root ]] && cd "$da_root" && pwd       &&
+    git-check-no-changes                            &&
+    composer require "${names[@]}"                  &&
+    git add .                                       &&
+    git commit -m "+ add component: ${names[*]}"
+}
+
+composer-path() {
+    declare package="$1"
+
+    _composer-bin show --path | grep "$package" | sort | awk -F '[ \r\n\t]+' 'NR==1 {printf "%s",$2}'
+}
+
+composer-global-config() {
+    _composer-bin config --list --global
+}
+
+composer-global-home() {
+    _composer-bin global config home 2> /dev/null
+}
+
+composer-reinstall-package() {
+    declare package="$1"
+    shift 1
+
+    declare path="$(composer-path "$package")"
+
+    [[   -z "$path" ]] && { echo "No path for package [$package] !"; return 1; }
+    [[ ! -d "$path" ]] && { echo "Path [$path] is not dir !"       ; return 1; }
+
+    # ! [[ "${path##${ROOT_DIR}}" != "${path}" ]] && { echo "Path [$path] is not subdir of [$ROOT_DIR] !"; return 1; }
+
+    echo "-- Reinstall $package --"
+    echo "Deleting path [$path]"
+
+    rm -rf "$path"
+
+    echo '-- Composer install --'
+    _composer-bin install "${COMPOSER_INSTALL_OPTS[@]}" "${@}"
+}
+
+composer-install() {
+    _composer-bin install "${COMPOSER_INSTALL_OPTS[@]}" "${@}"
+}
+
+composer-remove() {
+    declare package="$1"
+
+    if [[ -n $package && '-' != "${package:0:1}" ]]; then
+        echo "-- Composer remove $package ${*:2} --"
+        _composer-bin remove "$package" "${@:2}" "${COMPOSER_INSTALL_OPTS[@]}"
+        _composer-bin update "$package"
+    else
+        echo "-- Composer remove ${*} --"
+        _composer-bin remove "${@}" "${COMPOSER_INSTALL_OPTS[@]}"
+    fi
+}
+
+
+composer-why() {
+    _composer-bin why "$@"
+}
+
+composer-require() {
+    _composer-bin require "${@}" "${COMPOSER_INSTALL_OPTS[@]}"
+}
+
+composer-update() {
+    declare package="$1"
+
+    if [[ -n $package && '-' != "${package:0:1}" ]]; then
+        echo "-- Composer update $package ${*:2} --"
+        _composer-bin update "$package" "${@:2}" "${COMPOSER_INSTALL_OPTS[@]}"
+    else
+        echo "-- Composer update all ${*:2} --"
+        _composer-bin update "${@}" "${COMPOSER_INSTALL_OPTS[@]}"
+    fi
+}
+
+composer-update-remove() {
+    declare package="$1"
+    shift 1
+
+    declare path="$(composer-path "$package")"
+
+    [[   -z "$path" ]] && { echo "No path for package [$package] !"; return 1; }
+    [[ ! -d "$path" ]] && { echo "Path [$path] is not dir !"       ; return 1; }
+
+    echo "-- Deleting $package --"
+    echo "Deleting path [$path]"
+    rm -rf "$path"
+
+    echo "-- Requiring package $package $* -- "
+    _composer-bin update "$package" "$@"
+}
+
+# DOES NOT WORK BECAUSE getopts can't pass through long opts
+# composer-update() {
+#     declare yes=1
+#
+#     # -- Arguments --
+#     declare flags=":y" OPTIND=1
+#     declare -a params
+#     for (( ; OPTIND <= $#; )) do
+#        if getopts "$flags" flag; then case $flag in
+#             y) yes=1 ;;
+#
+#             :) [[ -n ${OPTARG} ]] && params+=("-${OPTARG}") ;;
+#             ?) [[ -n ${OPTARG} ]] && params+=("-${OPTARG}") ;;
+#             *) echo "Unexpected: ${flag} ${OPTARG} ${OPTIND}" ;;        esac; else
+#             params+=("${!OPTIND}"); ((OPTIND++))
+#         fi
+#     done
+#
+#     declare package="${params[0]}"
+#
+#     echo "-- Composer update $package ${params[*]:1} --"
+#
+#     if [[ -n $yes ]]; then
+#         yes |
+#         _composer-bin update "$package" "${params[@]:1}" "${COMPOSER_INSTALL_OPTS[@]}"
+#     else
+#         _composer-bin update "$package" "${params[@]:1}" "${COMPOSER_INSTALL_OPTS[@]}"
+#     fi
+# }
+
+
+composer-show-orphaned() {
+    _composer-bin show -N | xargs -n 1 composer why | grep "There is no installed package"
+}
+
+composer-show-deps() {
+    _composer-bin show --tree --ansi "$@" | less -S
+}
+
+composer-show() {
+    declare package="$1"
+
+    if [[ -z ${package} ]]; then
+        _composer-bin show -N
+    else
+        _composer-bin show "$package" "${@:2}"
+    fi
+}
+
+composer-platform() {
+    _composer-bin show --platform "$@"
+}
+
+_composer-list-packages() {
+    declare list="$(_composer-bin show -N)"
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -gt 0 ]] ; then
+        COMPREPLY=( $( compgen -W "${list}" -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+complete -F _composer-list-packages composer-reinstall-package composer-show
+complete -F _composer-list-packages composer-path composer-update composer-update-ignore
+complete -F _composer-list-packages composer-remove composer-why
+complete -F _composer-list-packages composer-require composer-require-again composer-require-remove
+
+_composer-root()
+(
+    while [ "$PWD" != '/' ]; do
+        [[ -e "composer.json" ]] && { echo "$PWD"; break; }
+
+        cd ..
+    done;
+
+    if [ "$PWD" == '/' ]; then echo 'No composer root could be found!' 1>&2; exit 1; fi
+)
+
+composer-reinstall-total() (
+    declare da_root="$(_composer-root)"
+
+    [[ -d $da_root ]] && cd "$da_root"   &&
+    echo '-- Removing composer.lock --'  &&
+    rm -f ./composer.lock                &&
+    echo '-- Removing symfony.lock --'   &&
+    rm -f ./symfony.lock                 &&
+    echo '-- Removing vendor dir --'     &&
+    rm -rf ./vendor                      &&
+    echo '-- Installing components --'   &&
+    _composer-bin install "${COMPOSER_INSTALL_OPTS[@]}" "${@}"
+)
+
+
+composer-reinstall-lock() (
+    declare da_root="$(_composer-root)"
+
+    [[ -d $da_root ]] && cd "$da_root"   &&
+    echo '-- Removing composer.lock --'  &&
+    rm -f ./composer.lock                &&
+    echo '-- Removing symfony.lock --'   &&
+    rm -f ./symfony.lock                 &&
+    echo '-- Installing components --'   &&
+    _composer-bin install "${COMPOSER_INSTALL_OPTS[@]}" "${@}"
+)
+
+# composer-cache-clear() {
+#     rm ~/.composer/cache* -rf
+# }
+
+composer-reinstall-vendor() (
+    declare da_root="$(_composer-root)"
+
+    [[ -d $da_root ]] && cd "$da_root" &&
+    echo '-- Removing vendor dir --'   &&
+    rm -rf ./vendor                    &&
+    echo '-- Installing components --' &&
+    _composer-bin install "${COMPOSER_INSTALL_OPTS[@]}" "${@}"
+)
+
+composer-global-bin() {
+    COMPOSER_HOME="$(composer-global-home | sed 's~[[:space:]]*$~~;s~^[[:space:]]*~~')"
+
+    declare quite path_opts
+    # -- Arguments --
+    declare flags="q" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+       if getopts "$flags" flag; then case $flag in
+            q) quite=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    [[ -z $quite ]] && path_opts+=(-v)
+
+    if ! path-has "$COMPOSER_HOME/vendor/bin"; then
+        [[ -z $quite ]] && echo "Adding composer vendor/bin to PATH: [$COMPOSER_HOME/vendor/bin]" >&2
+        path-add "$COMPOSER_HOME/vendor/bin" "${path_opts[@]}"
+    else
+        [[ -z $quite ]] && echo "Composer global vendor/bin already in PATH: [$COMPOSER_HOME/vendor/bin]" >&2
+    fi
+}
+
+[[ -d $COMPOSER_HOME ]] && path-add "$COMPOSER_HOME/vendor/bin"
+
+# https://github.com/iArren/composer-bash-completion
+# Composer completion
+
+_composer-bin-complete()
+{
+    local cur prev words cword
+    _init_completion || return
+
+    local special i
+    for (( i=0; i < ${#words[@]}-1; i++ )); do
+        if [[ ${words[i]} == @(require) ]]; then
+            special=${words[i]}
+        fi
+    done
+
+    local cache=$HOME/.composer-completion
+    if [[ -n $special ]]; then
+        local packages=$cache/packages.list
+        if [ ! -f $packages -o $( which _composer-bin ) -nt $packages ]; then
+            # checking existance of the packages list
+            mkdir -p $cache
+            _composer-bin show -a | grep -v '^No composer' >$packages
+        fi
+        if [[ $prev != $special ]]; then
+            # assume $prev is a package name
+            if [[ $( cat $packages | grep "^$prev" | wc -l ) -gt 0 ]]; then
+                local versions=$cache/packages/$prev/versions
+                if [ ! -f $versions -o $packages -nt $versions ]; then
+                    # checking cache existance
+                    mkdir -p $( dirname $versions )
+                    _composer-bin show $prev | \
+                        sed -r -e 's/\x1b\[[0-9]+m//g' | grep ^versions | \
+                        sed -r -e 's/^versions : //' -e 's/, /\n/g' >$versions
+                fi
+                COMPREPLY=( $( cat $versions | grep "^$cur" | sort -u ) )
+            fi
+        fi
+        if [[ -z $COMPREPLY ]]; then
+            # if $prev was not a package
+            COMPREPLY=( $( cat $packages | grep "^$cur" | sort -u ) )
+        fi
+        return 0
+    fi
+
+    if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $( compgen -W '-h -q -v -V -n -d \
+            --help --quiet --verbose --version --ansi --no-ansi \
+            --no-interaction --profile --working-dir' -- "$cur" ) )
+    else
+        COMPREPLY=( $( compgen -W "$(_composer-bin list --raw 2>/dev/null | awk '{print $1}')" -- "$cur" ) )
+    fi
+
+    return 0
+} &&
+complete -F _composer-bin-complete _composer-bin

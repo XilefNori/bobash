@@ -1,0 +1,13 @@
+inst-duti() {
+	brew install duti
+}
+
+sublime-set-default() {
+	duti -s com.sublimetext.3 public.plain-text all
+	duti -s com.sublimetext.3 public.unix-executable all
+	# duti -s com.sublimetext.3 public.data all
+}
+
+sublime-get-bundle() {
+	lsappinfo info -only bundleid 'Sublime Text'
+}

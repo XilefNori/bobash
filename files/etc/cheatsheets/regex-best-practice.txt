@@ -1,0 +1,12 @@
+Use as specific query string as possible
+
+https://www.loggly.com/blog/regexes-the-bad-better-best/
+
+Matchig string     :  2014-08-26 app[web.1]: 50.0.134.125 - - [26/Aug/2014 00:27:41] "GET / HTTP/1.1" 200 14 0.0005
+Non-matchig string :  50.0.134.125 - - [26/Aug/2014 00:27:41] \"GET / HTTP/1.1\" 200 14 0.0005
+
+.* (.*)\[(.*)\]:.*                                  - Bad    - consuming time much time for non-Matching input
+[12]\d{3}-[01]\d-[0-3]\d (.*)\[(.*)\]:.*            - Better - rejecting non matching faster
+[12]\d{3}-[01]\d-[0-3]\d ([^ \[]*?)\[([^\]]*?)\]:.* - Best use non-greedy quantifiers
+
+\d{4}-\d{2}-\d{2} (.*?)\[(.*?)\]:.*                 - Compromize easy-to-read, good performance

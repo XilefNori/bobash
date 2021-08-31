@@ -1,0 +1,40 @@
+http://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html
+mans ^INVOCATION bash
+
+-- Invoked as an interactive login shell, or with --login option --------------
+
+Reads and executes commands from the file: 
+/etc/profile
+
+Reads and executes commands from the first one (in that order) that exists and is readable:
+~/.bash_profile
+~/.bash_login
+~/.profile
+
+The --noprofile option may be used when the shell is started to inhibit this behavior.
+
+When a login shell exits, Bash reads and executes commands from the file (if it exists):
+~/.bash_logout.
+
+-- Invoked as an interactive non-login shell ----------------------------------
+
+Bash reads and executes commands from (if that file exists): 
+~/.bashrc
+
+This may be inhibited by using the --norc option. 
+The --rcfile file option will force Bash to read and execute commands from that file.
+
+-- Invoked non-interactively --------------------------------------------------
+
+[ -n "$BASH_ENV" ] && source "$BASH_ENV"
+
+-- Invoked with the name sh ---------------------------------------------------
+
+login-shell: 
+    /etc/profile 
+    ~/.profile
+--noprofile
+
+interactive:
+    [ -n "$ENV" ] && source "$ENV"
+

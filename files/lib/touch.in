@@ -1,0 +1,12 @@
+# touch() { touchf "$@"; }
+
+touchf() {
+    declare da_file="$1"
+    shift 1
+
+    declare da_dir="$(dirname "$da_file")"
+
+    [[ ! -d $da_dir ]] && mkdir -p "$da_dir"
+
+    command touch "$@" "$da_file";
+}

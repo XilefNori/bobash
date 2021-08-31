@@ -1,0 +1,11 @@
+FIREFOX_OPTS=(-new-tab)
+# CHROME_OPTS=(/new-tab)
+CHROME_OPTS=()
+
+firefox() {
+	"$PROGRAM_FILES_CYGWIN/Mozilla Firefox/firefox.exe" "${FIREFOX_OPTS[@]}" "$@"
+}
+
+chrome() {
+	"C:/Program Files (x86)/Google/Chrome/Application/chrome.exe" "${CHROME_OPTS[@]}" "$@"
+}

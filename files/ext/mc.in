@@ -1,0 +1,76 @@
+[[ -n $I_AM_ROOT ]] && root='root'
+
+declare -a skins
+
+case "$TERM" in
+*256color*)
+    skins+=(/usr/share/mc/skins/modarin256.ini)
+    skins+=(/usr/share/mc/skins/xoria256.ini)
+    ;;
+esac
+
+skins+=(/usr/share/mc/skins/modarcon16.ini)
+skins+=(/usr/share/mc/skins/default.ini)
+
+skin=default
+for file in "${skins[@]}"; do
+    if [[ -f $file ]]; then
+        file="`basename "${file}"`"
+        skin=${file%.ini}
+        break;
+    fi
+done
+
+MC_SKIN="${skin}${root}"
+
+export MC_HOME="$HOME"
+
+mc() {
+    declare MC_USER=$(id | sed 's/[^(]*(//;s/).*//')
+    declare MC_PWD_FILE="${TMPDIR-/tmp}/mc-$MC_USER/mc.pwd.$$"
+    declare MC_PWD='.'
+
+    TERM=xterm-256color command mc -S "$MC_SKIN" -P "$MC_PWD_FILE" "$@"
+
+    if test -r "$MC_PWD_FILE"; then
+        MC_PWD="$(cat "$MC_PWD_FILE")"
+        test -n "$MC_PWD" && test -d "$MC_PWD"&& cd "$MC_PWD"
+    fi
+
+    rm -f "$MC_PWD_FILE"
+}
+
+mc-skin-list() {
+    declare -a params
+
+    [ -n "$1" ] && params+=(  -name "*$1*")
+    [ -n "$2" ] && params+=(! -name "*$2*")
+
+    find /usr/share/mc/skins/ -type f "${params[@]}" -exec basename {} .ini \;
+}
+
+mc-skin-show() {
+    skins=($(mc-skin-list "$1" "$2"))
+
+    for skin in "${skins[@]}"; do
+        command mc -S "$skin"
+        read -n 1 -p $skin;
+    done
+}
+
+_mc-skin-show() {
+    items="$(mc-skin-list)"
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -gt 0 ]] ; then
+        COMPREPLY=( $( compgen -W "${items}" -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+
+complete -F _mc-skin-show mc-skin-show

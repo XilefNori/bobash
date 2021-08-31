@@ -1,0 +1,41 @@
+pv-filter-lines() {
+    declare filter count
+
+    filter="$1"
+    count="$2"
+
+    grep --line-buffered -- "$filter" | pv -l -s "$count" > /dev/null
+}
+
+pv-sample() {
+    declare count=10
+    declare label='LABEL'
+
+    pv-sample-input -s 0.5 -n "$count" -l "$label" | pv-filter-lines "$filter" "$count"
+}
+
+pv-sample-input() {
+    declare count=20
+    declare line='LABEL'
+    declare sleep=0.2
+
+    # -- Arguments --
+    declare flags="l:n:s:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            l) line="${OPTARG}" ;;
+            n) count="${OPTARG}" ;;
+            s) sleep="${OPTARG}" ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+
+    for (( i=0; i < count; i++ )); do
+        sleep "$sleep"
+
+        echo "$line"
+    done
+}

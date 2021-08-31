@@ -1,0 +1,13 @@
+typef() {
+	type "$@" | command vim -c "set syntax=sh" -
+}
+
+complete -A function typef
+
+pipestatus() {
+	echo "${PIPESTATUS[@]}"
+}
+
+bash-norc() {
+	env -i TERM=$TERM $(which bash) --noprofile --norc
+}

@@ -1,0 +1,24 @@
+# Make bash append rather than overwrite the history on disk
+shopt -s histappend
+
+# Don't put duplicate lines in the history.
+export HISTCONTROL="ignoredups:erasedups:ignorespace"
+# Ignore some controlling instructions
+export HISTIGNORE="[   ]*:&:bg:fg:exit:history:pwdgen*:ls:hg*"
+
+export HISTSIZE=2000
+export HISTFILESIZE=10000
+export HISTTIMEFORMAT="[%d/%m/%y %H:%M] "
+# export HISTCONTROL="ignoreboth"
+
+# Whenever displaying the prompt, write the previous line to disk
+# export PROMPT_COMMAND="history -a"
+# history -c
+
+prompt-update-history() {
+	history -a
+	history -r
+}
+
+prompt-command-add prompt-update-history
+

@@ -1,0 +1,19 @@
+TIMEZONE_DEFAULT='Europe/Moscow'
+
+timezone-list() {
+    timedatectl list-timezones
+}
+
+timezone-show() {
+    timedatectl
+}
+
+_timezone-list() { COMPREPLY=( $( compgen -W "$(timezone-list)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _timezone-list timezone-set
+
+timezone-set() {
+    declare timezone="$1"
+    [[ -z $timezone ]] && timezone="$TIMEZONE_DEFAULT"
+
+    timedatectl set-timezone "$timezone"
+}

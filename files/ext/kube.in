@@ -1,0 +1,629 @@
+# KUBE_NS=<kube default namespace>
+# KUBE_SQL_SERVER_POD=<kube pod sql server>
+export KUBE_NS
+
+KUBE_DIR=~/.bobash/config/kube
+KUBE_DIR_DUMP=~/sql/dump
+KUBE_POD_HOME=/bobash/home
+
+KUBE_DEBUG=0
+KUBE_VERBOSE=0
+
+KUBE_CACHE_NAMESPACES=$((24*3600))
+KUBE_CACHE_PODS=600
+KUBE_CACHE_ENV=600
+
+# ------------------------------------------------------------------------------------------
+
+ kube() { wrapper-help-command  kube kubectl     "$@" ; }
+_kube() { _wrapper-complete     kube __start_kubectl  ; }
+complete -o filenames -F _kube kube
+
+ kube-cfg() {  var-cfg "KUBE" "$@" ; }
+_kube-cfg() { _var-cfg "kube-cfg"  ; }
+complete -F _kube-cfg kube-cfg
+
+ kube-.complete() {  wrapper-complete-cmd  kube "$@" ; }
+_kube-.complete() { _wrapper-complete-cmd  kube      ; }
+complete -F _kube-complete kube-complete
+
+# ------------------------------------------------------------------------------------------
+
+kube-os() { kube-list-pods-os "$@"; }
+
+_kube-pod-os() {
+    echo "cat /etc/*-release | grep PRETTY_NAME= | sed 's/PRETTY_NAME=//; s:\"::g'" | kube-exec -s "$1" 2> /dev/null
+}
+
+kube-list-pods-os() {
+    list-x "$FUNCNAME" 'kube-list-pods -fC' '_kube-pod-os' -c "$KUBE_CACHE_PODS" "$@"
+}
+
+kube-pods() {
+    kubectl get pods --namespace "$KUBE_NS" "$@" | less -FXS
+}
+
+kube-list-pods-status() {
+    kube-pods "$@"
+}
+
+kube-list-pods() {
+    [[ -z $KUBE_NS ]] && { echo 'You must set KUBE_NS environment variable' >&2; return 1; }
+
+    declare full cache verbose
+    # -- Arguments --
+    declare flags="OACfv" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            f) full=1 ;;
+            v) verbose=1 ;;
+			C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME-$KUBE_NS")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME" -f -u "$KUBE_CACHE_PODS"
+    else
+        [[ -n $verbose ]] && echo "kubectl -n \"$KUBE_NS\" get pods -o name" >&2
+
+        kubectl get pods --namespace "$KUBE_NS" -o json |
+            jq -r '.items[] | select(.status.phase == "Running") | .metadata.name' |
+                sort | tee "$fa_cache"
+
+        # kubectl -n "$KUBE_NS" get pods -o name | sort | tee "$fa_cache"
+    fi | {
+    	declare sed_opts+=(-e "s~^pod/~~" )
+
+	    if [[ -z $full ]]; then
+            sed_opts+=(-e "s:-[0-9a-z]{8,10}-[0-9a-z]{5}$::")
+            # sed_opts+=(-e "s:-[0-9a-z]{5}$::")
+            # sed_opts+=(-e "s:-[0-9]{1,2}$::")
+	    fi
+
+    	sed -r "${sed_opts[@]}"
+    }
+}
+
+_kube-pod-container() {
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        COMPREPLY=($( compgen -W "$(kube-list-pods -C)" -- "${COMP_WORDS[COMP_CWORD]}" ));
+
+        return 0
+    fi
+
+    if [[ ${COMP_CWORD} -eq 2 ]] ; then
+        declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+        COMPREPLY=($( compgen -W "$(kube-pod-containers "$prev")" -- "${COMP_WORDS[COMP_CWORD]}" ));
+        return 0
+    fi
+
+    return 0
+}
+
+kube-exec() {
+    [[ -z $KUBE_NS ]] && { echo 'You must set KUBE_NS environment variable' >&2; return 1; }
+
+    declare cmd verbose user shell
+
+    # -- Arguments --
+    declare flags="OAvu:c:s" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            u) user="${OPTARG}" ;;
+            s) shell=1 ;;
+            c) cmd="${OPTARG}" ;;
+            v) verbose=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare pod="$(kube-pod ${params[0]})"
+    declare container="${params[1]}"
+
+    declare address=("$pod")
+    [[ -n $container ]] && address+=(-c "$container")
+
+    declare bash_opts
+    [[ -n $verbose ]]  && bash_opts+=('-x')
+
+    declare docker_opts=(-i)
+    [[ -n $user ]] && docker_opts+=(-u "$user")
+
+    declare intepreter
+    [[ -n $shell ]] && intepreter=sh || intepreter=bash
+
+    [[ -n $verbose ]] && echo "kubectl -n \"$KUBE_NS\" exec  ${docker_opts[@]} \"${address[@]}\" -- $intepreter  ${bash_opts[@]}" >&2
+                               kubectl -n  "$KUBE_NS"  exec "${docker_opts[@]}" "${address[@]}"  -- $intepreter "${bash_opts[@]}" -
+}
+complete -F _kube-pod-container kube-exec
+
+kube-enter() {
+    [[ -z $KUBE_NS ]] && { echo 'You must set KUBE_NS environment variable' >&2; return 1; }
+
+    declare -a docker_opts pod_opts bash_opts
+
+    # -- Arguments --
+    declare flags="OAvuU:h:Hs" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            v) verbose=1 ;;
+            s) shell=1 ;;
+            u) pod_opts+=(-u) ;;
+            U) docker_opts+=(-u "${OPTARG}") ;;
+            H) bash_opts+=(-c "HOME='$KUBE_POD_HOME' bash") ;;
+            h) bash_opts+=(-c "HOME='${OPTARG}' bash") ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare pod="$(kube-pod "${pod_opts[@]}" "${params[0]}")"
+    declare container="${params[1]}"
+
+    declare address=("$pod")
+    [[ -n $container ]] && address+=(-c "$container")
+
+    declare intepreter
+    [[ -n $shell ]] && intepreter=sh || intepreter=bash
+
+    [[ -n $verbose ]] && echo "kubectl -n \"$KUBE_NS\" exec -it  ${docker_opts[@]} \"${address[@]}\" -- $intepreter  ${bash_opts[@]}" >&2
+                               kubectl -n  "$KUBE_NS"  exec -it "${docker_opts[@]}" "${address[@]}"  -- $intepreter "${bash_opts[@]}"
+}
+complete -F _kube-pod-container kube-enter
+
+kube-log() {
+    [[ -z $KUBE_NS ]] && { echo 'You must set KUBE_NS environment variable' >&2; return 1; }
+
+    declare name="$1"
+    shift 1
+    declare pod="$(kube-pod "${pod_opts[@]}" "$name")"
+
+    [[ $KUBE_VERBOSE -gt 0 ]] && echo "kubectl -n \"$KUBE_NS\" logs "$pod" "$@"" >&2
+
+    kubectl -n "$KUBE_NS" logs "$pod" "$@"
+}
+complete -F _kube-pod-container kube-log
+
+kube-pod-containers() {
+    [[ -z $KUBE_NS ]] && { echo 'You must set KUBE_NS environment variable' >&2; return 1; }
+
+    declare name="$1"
+    declare pod="$(kube-pod "${pod_opts[@]}" "$name")"
+
+    [[ $KUBE_VERBOSE -gt 0 ]] && echo "kubectl get pods '$pod' --namespace '$KUBE_NS' -o jsonpath='{.spec.containers[*].name}'" >&2
+
+    kubectl get pods "$pod" --namespace "$KUBE_NS" -o jsonpath='{.spec.containers[*].name}'
+}
+complete -F _kube-pods kube-pod-containers
+
+kube-namespace() {
+    [[ -n $1 ]] && KUBE_NS="$1"
+
+    echo "$KUBE_NS"
+}
+complete -F _kube-namespaces kube-namespace
+
+_kube-namespaces() { COMPREPLY=( $( compgen -W "$(kube-list-namespaces -C)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+
+kube-list-namespaces() {
+    declare cache verbose
+    # -- Arguments --
+    declare flags="OAC" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME" -u "$KUBE_CACHE_NAMESPACES"
+    else
+        [[ $KUBE_VERBOSE -gt 0 ]] && echo "kubectl get namespaces -o name" >&2
+
+        kubectl get namespaces -o name
+
+        # kubectl -n "$KUBE_NS" get pods -o name | sort | tee "$fa_cache"
+    fi | {
+        declare sed_opts+=(-e 's:namespace/::' )
+
+        sed -r "${sed_opts[@]}"
+    }
+}
+
+kube-pod() {
+    [[ -z $KUBE_NS ]] && { echo 'You must set KUBE_NS environment variable' >&2; return 1; }
+
+    declare update
+
+    # -- Arguments --
+    declare flags="OAu" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            u) update=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+	declare regex name
+
+    [[ -n $update ]] && kube-list-pods > /dev/null
+
+	name="${params[0]}"
+
+    regex+=("[0-9a-z]{8,10}-[0-9a-z]{5}$")
+    regex+=("[0-9a-z]{5}$")
+    regex+=("[0-9]{1,2}$")
+
+    declare pod="$(kube-list-pods -Cf | grep -P "^$name$" | head -n 1)"
+
+    [[ -n $pod ]] && { [[ $KUBE_DEBUG -gt 0 ]] && echo "pod: $pod" >&2; echo "$pod"; return; }
+
+    for i in "${regex[@]}"; do
+        pod="$(kube-list-pods -Cf | grep -P "^$name-$i" | head -n 1)"
+
+        [[ -n $pod ]] && { [[ $KUBE_DEBUG -gt 0 ]] && echo "pod: $pod" >&2; echo "$pod"; return; }
+    done
+
+    echo "Pod [$name] not found!" >&2
+    return 1
+}
+
+kube-cp() {
+    [[ -z $KUBE_NS ]] && { echo 'You must set KUBE_NS environment variable' >&2; return 1; }
+
+    declare -a input
+    declare from quite verbose
+
+    # -- Arguments --
+    declare flags="OAfqv" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            f) from=1 ;;
+            q) quite=1 ;;
+            v) verbose=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare pod="${params[0]}"
+    declare fromFile="${params[1]}"
+    declare toFile="${params[2]}"
+
+    if [[ -z $fromFile ]]; then
+        if [[ -n $from ]]; then
+            declare error="usage: $FUNCNAME pod podFile [localFile]"
+        else
+            declare error="usage: $FUNCNAME pod localFile [podFile]"
+        fi
+
+        echo "$error" >&2
+
+        return 1
+    fi
+
+    pod=$(kube-pod "$pod") || return 1
+
+    {
+        if [[ -n $from ]]; then
+            declare localFile="$toFile"
+            declare podFile="$fromFile"
+
+            [[ -z $localFile ]] && localFile="$HOME/$(basename "$podFile")"
+
+            [[ -z $quite ]] && echo kubectl cp "$KUBE_NS/$pod:$podFile" "$localFile"
+                                    kubectl cp "$KUBE_NS/$pod:$podFile" "$localFile"
+
+            [[ -z $quite ]] && ls -l "$localFile"
+        else
+            declare localFile="$fromFile"
+            declare podFile="$toFile"
+
+            [[ ! -f $localFile ]] && { echo "Local file [$localFile] not exists!"; return 1; }
+
+            [[ -z $podFile   ]] && podFile="/tmp/$(basename "$localFile")"
+
+            [[ -z $quite ]] && echo kubectl cp "$localFile" "$KUBE_NS/$pod:$podFile"
+                                    kubectl cp "$localFile" "$KUBE_NS/$pod:$podFile"
+        fi
+    } >&2
+}
+
+kube-env() {
+    [[ -z $KUBE_NS ]] && { echo 'You must set KUBE_NS environment variable' >&2; return 1; }
+
+    declare values cache names strict
+    # -- Arguments --
+    declare flags="OACvnS" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            v) values=1 ;;
+            S) strict=1 ;;
+            n) names=1 ;;
+            C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+	declare pod="${params[0]}"
+	declare name="${params[1]}"
+
+    pod=$(kube-pod "$pod") || return 1
+
+    declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME-$KUBE_NS-$pod")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME" "$pod" -u "$KUBE_CACHE_ENV"
+    else
+        echo "env" | kube-exec "$pod" 2> /dev/null | tee "$fa_cache"
+    fi | {
+		if [[ -n $name ]]; then
+            declare mask="^$name[^=]*="
+
+            if [[ $strict -gt 0 ]]; then
+                mask="^$name="
+            fi
+
+            grep -P "$mask" | sort | {
+                if [[ -n $values ]]; then
+                    sed -r "s:$mask::"
+                else
+                    cat
+                fi
+            }
+        elif [[ -n $names ]]; then
+            sed -r 's:^(\w+)=.*:\1:'
+		else
+			cat
+		fi
+	}
+}
+
+kube-pdump() {
+    [[ -z $KUBE_NS             ]] && { echo 'You must set KUBE_NS environment variable' >&2; return 1; }
+    [[ -z $KUBE_SQL_SERVER_POD ]] && { echo 'You must set KUBE_SQL_SERVER_POD environment variable' >&2; return 1; }
+    [[ -z $KUBE_DIR_DUMP       ]] && { echo 'You must set KUBE_DIR_DUMP environment variable' >&2; return 1; }
+
+    [[ ! -d $KUBE_DIR_DUMP ]] && {
+        mkdir -p "$KUBE_DIR_DUMP" || { echo 'Cannot create KUBE_DIR_DUMP=[$KUBE_DIR_DUMP] dir!'; return 1;}
+    }
+
+    declare verbose quite
+
+    # -- Arguments --
+    declare flags="OAvq" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            v) verbose=1 ;;
+            q) quite=1
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare pod="${params[0]}"
+
+    declare database_url
+            database_url="$(kube-env "$pod" DATABASE_URL -v)" || return 1
+    declare database=($(parse-url "$database_url" user host port rpath))
+
+    declare user=${database[0]%:*}
+    declare pass=${database[0]##*:}
+    declare host=${database[1]}
+    declare port=${database[2]}
+    declare db=${database[3]}
+
+    declare day="$(date +%F)"
+    declare fa_pod_dump="/tmp/$db-dump-$day.pgsql"
+    declare fa_local_dump="$KUBE_DIR_DUMP/kube-$KUBE_NS-pod-$pod-db-$db-dump-$day.pgsql"
+
+    if [[ -n $verbose ]]; then
+       echo "PGPASSWORD='$pass' pg_dump -U '$user' -h '$host' -p '$port' '$db' > '$fa_pod_dump'" >&2
+    fi
+
+    echo "PGPASSWORD='$pass' pg_dump -U '$user' -h '$host' -p '$port' '$db' > '$fa_pod_dump'" | kube-exec "$KUBE_SQL_SERVER_POD"
+    kube-cp -f "$KUBE_SQL_SERVER_POD" "$fa_pod_dump" "$fa_local_dump"
+    echo "rm -f '$fa_pod_dump'" | kube-exec "$KUBE_SQL_SERVER_POD"
+
+    echo "$fa_local_dump"
+}
+complete -F _kube-pods kube-pdump
+
+kube-psql() {
+    [[ -z $KUBE_SQL_SERVER_POD ]] && { echo 'You must set KUBE_SQL_SERVER_POD environment variable' >&2; return 1; }
+
+    declare -a input
+    declare verbose fa_script sql quite
+
+    # -- Arguments --
+    declare flags="OAvf:s:q" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            v) verbose=1 ;;
+            f) fa_script="${OPTARG}" ;;
+            s) sql="${OPTARG}" ;;
+            q) quite=1
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare pod="${params[0]}"
+    declare item="${params[1]}"
+
+    pod=$(kube-pod "$pod") || return 1
+
+    if [[ -n $item && -z $sql && -z $fa_script ]]; then
+        if [[ -f $item ]]; then
+            fa_script="$item"
+        else
+            sql="$item"
+        fi
+    fi
+
+    [[ -n $sql ]] && input=("$sql")
+
+    if [[ -z $fa_script && -z $input ]]; then
+        declare line IFS
+        while IFS= read -r line; do
+            [[ -z $line ]] && continue  # break if line is empty
+            input+=("$line")
+        done
+    fi
+
+    declare database_url
+	        database_url="$(kube-env "$pod" DATABASE_URL -v)" || return 1
+	declare database=($(parse-url "$database_url" user host port rpath))
+
+	declare user=${database[0]%:*}
+	declare pass=${database[0]##*:}
+	declare host=${database[1]}
+	declare port=${database[2]}
+	declare db=${database[3]}
+
+    {
+        echo "[$KUBE_SQL_SERVER_POD]: $user:xxx@$host:$port/$db"
+        echo
+    } >&2
+
+    if [[ -n $fa_script ]]; then
+        declare fa_pod_script="/tmp/$(basename "$fa_script")"
+
+        [[ -z $quite ]] && {
+            echo "Will execute [$fa_script]"
+            cat "$fa_script"
+            echo
+
+            read -n 1 -p "Press any key..."
+            echo
+        }
+
+        declare kube_cp_opts=()
+        [[ -n $quite ]] && kube_cp_opts+=(-q)
+
+        kube-cp "${kube_cp_opts[@]}" "$KUBE_SQL_SERVER_POD" "$fa_script" "$fa_pod_script" || {
+            echo "Could not copy script [$fa_script] -> pod [$pod:$fa_pod_script]" >&2
+
+            return 1
+        }
+
+        if [[ -n $verbose ]]; then
+           echo "PGPASSWORD='$pass' psql -U '$user' -h '$host' -p $port -d '$db' -f '$fa_pod_script'" >&2
+        fi
+
+        echo "PGPASSWORD='$pass' psql -U '$user' -h '$host' -p '$port' -d '$db' -f '$fa_pod_script'" | kube-exec "$KUBE_SQL_SERVER_POD" | less -FXS
+    else
+        if [[ -n $verbose ]]; then
+           echo "PGPASSWORD='$pass' psql -U '$user' -h '$host' -p '$port' -d '$db' -c \"${input[*]}\"" >&2
+        fi
+
+        echo "PGPASSWORD='$pass' psql -U '$user' -h '$host' -p '$port' -d '$db' -c \"${input[*]}\"" | kube-exec "$KUBE_SQL_SERVER_POD" | less -FXS
+    fi
+}
+
+_kube-pods() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare cmd="${COMP_WORDS[1]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare opts="$(kube-list-pods -C)";
+
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0
+    fi
+
+    COMPREPLY=( $( compgen -o filenames -A file -- "$cur" ) )
+    return 0
+}
+
+complete -F _kube-pods kube-pod kube-cp
+
+_kube-env() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare pod="${COMP_WORDS[1]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # echo; echo "$FUNCNAME [$COMP_CWORD] ${COMP_WORDS[@]}" >&2
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare opts="$(kube-list-pods -C)";
+
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0
+    fi
+
+    declare opts="$(kube-env "$pod" -Cn)";
+    COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+
+    return 0
+}
+
+complete -F _kube-env kube-env
+
+_kube-psql() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare cmd="${COMP_WORDS[1]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare opts="$(kube-list-pods -C)";
+
+        COMPREPLY=($( compgen -W "${opts}" -- "${cur}" ));
+        return 0
+    fi
+
+    COMPREPLY=( $( compgen -o plusdirs  -f -X '!*.@(pgsql|sql)' -- $cur ) )
+    return 0
+}
+
+complete -F _kube-psql kube-psql
+

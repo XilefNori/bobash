@@ -1,0 +1,17 @@
+id
+echo
+
+ls -l %HOME%/bobash-cfg.sh
+cd %HOME% && pwd &&
+bash ./bobash-cfg.sh %KEEP_DIST% -a uninstall -y -h %HOME%
+
+r=$?
+if [ $r -eq 0 ] ; then
+    echo "Uninstalled at %HOME%"
+else
+    echo "Error on uninstall"
+fi
+
+rm -f bobash-cfg.sh
+
+exit $r

@@ -1,0 +1,11 @@
+
+hostname-change() {
+    declare hostname="$1"
+
+    if type hostnamectl > /dev/null; then
+        sudo hostnamectl "$hostname"
+    else
+        sudo hostname "$hostname"
+        sudo echo "$hostname" > /etc/hostname
+    fi
+}

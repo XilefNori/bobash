@@ -1,0 +1,725 @@
+SF_DEBUG=0
+SF_ANSI=1
+SF_LESS=1
+SF_LESS_OPTS="-ISFX"
+SF_PARAMETER_FORMAT=json
+
+SF_CACHE_CMD_LIST=3600
+
+# ---------------------------------------------------------------------------------------
+
+_sf-root() (
+    declare executabe path
+
+    # -- Arguments --
+    declare flags="de" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            e) executabe=1 ;;
+            d) path=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    # Expand globs to null when there are no matches
+    # shopt -s nullglob
+
+    while [ "$PWD" != '/' ]; do
+        declare file=bin/console
+
+        [[ -f "$file" ]] && {
+            [[ -n $path ]]      && { echo "$PWD" ; break; }
+            [[ -n $executabe ]] && { echo "$file"; break; }
+
+            echo "$PWD:$file"; break;
+        }
+
+        cd ..
+    done
+
+    [ "$PWD" == '/' ] && { echo 'No Symfony root could be found!' >&2; exit 1; }
+
+    exit 0
+)
+
+_sf-bin() (
+    declare symfony da_symfony fr_symfony
+
+    symfony=$(_sf-root) || return 1;
+    da_symfony=${symfony/:*}
+    fr_symfony=${symfony/*:}
+
+    cd "$da_symfony"
+
+    [[ $SF_DEBUG -gt 0 ]] && {
+        declare i opts; for i in "$@"; do opts+=("'$i'"); done;
+        echo php "$fr_symfony" "${opts[@]}" >&2
+    }
+
+    php "$fr_symfony" "$@"
+)
+
+_sf-bin-no-logs() {
+    _sf-bin "$@" | grep -vP '^\[[-0-9: ]+\]'
+}
+
+_sf-bin-json() {
+    _sf-bin-no-logs "$@" --format=json
+}
+
+sf-help() { _sf-bin help "$@" | less; }
+complete -o default -F _symfony sf-help
+
+# output ---------------------------------------------------------------------
+
+# ANSICON=1 Нужно для того чтобы вывод symfony был цветным
+# Но его не должно быть в функции для подсказки
+if [[ $USYSTEM == 'cygwin' ]]; then
+    export ANSICON=1
+fi
+
+# ---------------------------------------------------------------------------------------
+
+ sf() { wrapper-help-command  sf _sf-bin  "$@"        ; }
+_sf() { _wrapper-complete sf _symfony _sf-bin-cmd-list; }
+complete -F _sf sf
+
+ sf-cfg() {  var-cfg "SF" "$@"; }
+_sf-cfg() { _var-cfg "sf-cfg" ; }
+complete -F _sf-cfg sf-cfg
+
+# ---------------------------------------------------------------------------------------
+
+_sf-exec() {
+    declare opts=();
+    [[ -n $SF_ANSI ]] && opts+=(--ansi)
+
+    cmd="$1"
+    shift 1
+
+    _sf-bin "$cmd" "${opts[@]}" "$@" | { [[ -n $SF_LESS ]] && less $SF_LESS_OPTS || cat; }
+}
+
+sf-commands() {
+    _sf-exec list "$@" | less
+}
+
+sf-sql()        { _sf-exec doctrine:query:sql "$@"; }
+
+sf-router()     { _sf-exec debug:router "$@";     }
+sf-autowiring() { _sf-exec debug:autowiring "$@"; }
+sf-about()      { _sf-exec about "$@";     }
+
+sf-reset() {
+    time {
+        sf-clear
+        sf-about
+    }
+}
+
+sf-cache-warmup() {
+    sf-clear
+    _sf-bin cache:warmup
+}
+
+sf-clear() {
+	declare da_symfony
+            da_symfony="$(_sf-root -d)" || return 1;
+
+    rm -rf $da_symfony/var/cache
+}
+
+sf-service-list() { sf_list-services "$@" ;}
+sf-tag-list()     { sf_list-tags  "$@" ; }
+
+sf-list-cmd() {
+    _sf-bin-cmd-list no-cache
+}
+
+_sf-bin-cmd-list() {
+	declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME" "$(_sf-root -d)")" || return 1
+
+    if [[ $1 == no-cache ]]; then
+        _sf-bin list --raw 2>/dev/null | awk '{print $1}' | tee "$fa_cache"
+    else
+        cached-cmd "$fa_cache" "$FUNCNAME" "no-cache" -u "$SF_CACHE_CMD_LIST"
+    fi
+}
+
+# Cache --------------------------------------------------------------------------------------
+
+ sf-.cache() { wrapper-simple    sf_cache "$@"; }
+_sf-.cache() { _wrapper-complete sf_cache     ; }
+complete -F _sf-.cache sf-.cache
+
+sf_cache-list()   { cache-list   "$(_sf-root -d)" "$@"; }
+sf_cache-show()   { cache-show   "$(_sf-root -d)" "$@"; }
+sf_cache-delete() { cache-delete "$(_sf-root -d)" "$@"; }
+
+_sf-cache-file()  { _cache-file  "$(_sf-root -d)"; }
+complete -F _sf-cache-file sf_cache-show sf_cache-delete
+
+# Complete -----------------------------------------------------------------------------------
+
+_sf-router() { COMPREPLY=( $( compgen -W "$(sf_list-routes -C)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _sf-router sf-router
+
+_sf-list-tags() { COMPREPLY=( $( compgen -W "$(sf_list-tags -C | sed 's:\\:/:g')" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _sf-list-tags sf-tag
+
+_sf-list-entities() { COMPREPLY=( $( compgen -W "$(sf_list-entities)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _sf-list-entities sf_entity-make sf-fixture-make sf_make-entity
+
+_sf-list-bundles() { COMPREPLY=( $( compgen -W "$(sf_list-bundles -C)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _sf-list-bundles sf_bundle-default sf_bundle-config
+
+_sf-list-services() { COMPREPLY=( $( compgen -W "$(sf_list-services -C | sed 's:\\:/:g')" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _sf-list-services sf-service sf-service-show
+
+_sf-list-events() { COMPREPLY=( $( compgen -W "$(sf_list-events -C)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _sf-list-events sf-event-listeners
+
+_sf-list-parameters() { COMPREPLY=( $( compgen -W "$(sf_list-parameters -C)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+complete -F _sf-list-parameters sf-parameters
+
+# Rabbit -------------------------------------------------------------------------------
+
+_sf-list-consumers() { COMPREPLY=( $( compgen -W "$(sf_list-consumers -C)" -- "${COMP_WORDS[COMP_CWORD]}" ) ); }
+
+sf_rabbit-consumer() {
+    _sf-exec rabbitmq:consumer "$@"
+}
+complete -F _sf-list-consumers sf_rabbit-consumer
+
+sf_rabbit-delete() {
+    _sf-exec rabbitmq:consumer "$@"
+}
+complete -F _sf-list-consumers sf_rabbit-delete
+
+
+ sf-rabbit() { wrapper-simple    sf_rabbit "$@"; }
+_sf-rabbit() { _wrapper-complete sf_rabbit     ; }
+complete -F _sf-rabbit sf-rabbit
+
+
+# Container -------------------------------------------------------------------------------
+
+sf-env()        { _sf-exec debug:container --env-vars "$@"; }
+
+sf-parameters() {
+    declare grep_opts=()
+
+    # -- Arguments --
+    declare flags=":AG:g:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+
+            g) grep="${OPTARG}"; grep_opts+=(-P) ;;
+            G) grep="${OPTARG}"; grep_opts+=(-F) ;;
+
+            :) [[ -n ${OPTARG} ]] && do_opts+=("-${OPTARG}")   ;;
+            ?) [[ -n ${OPTARG} ]] && do_opts+=("-${OPTARG}")   ;;
+            *) echo "Unexpected: ${flag} ${OPTARG} ${OPTIND}"; return 1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare param="${params[0]}"
+
+    if [[ -n $param ]]; then
+        _sf-exec debug:container --parameter="$param" --format "$SF_PARAMETER_FORMAT";
+    else
+        _sf-exec debug:container --parameters 2> /dev/null | {
+            if [[ -n $grep ]]; then
+                grep -i "${grep_opts[@]}" "$grep"
+            else
+                less -XFS
+            fi
+        }
+    fi
+}
+
+# sf-service-args() { _sf-exec debug:container --show-arguments "$@"; }
+
+sf-service() {
+    declare service="$(echo "$1" | sed 's:/:\\:g')"
+
+    _sf-exec debug:container --show-arguments "$service" "${@:2}";
+}
+
+sf-service-show() {
+    declare service
+
+    for service in "$@"; do
+        service="$(echo "$service" | sed 's:/:\\:g')"
+
+        _sf-bin debug:container --show-arguments "$service" ;
+    done | {
+        if [[ -n $SF_LESS ]]; then less $SF_LESS_OPTS; else cat; fi
+    }
+}
+
+sf-types()      { _sf-exec debug:container --types "$@";      }
+
+sf-tags()       { _sf-exec debug:container --tags "$@";      }
+
+sf-tag()        {
+    declare tag="$(echo "$1" | sed 's:/:\\:g')"
+
+    _sf-exec debug:container --tag "$tag" "${@:2}";
+}
+
+# Bundle ----------------------------------------------------------------------------------
+
+ sf-bundle() { wrapper-simple    sf_bundle "$@"; }
+_sf-bundle() { _wrapper-complete sf_bundle     ; }
+complete -F _sf-bundle sf-bundle
+
+sf_bundle-config()   { _sf-exec debug:config "$@";     }
+sf_bundle-default()  { _sf-exec config:dump "$@";      }
+sf_bundle-list()     { sf_list-bundles "$@" ;}
+
+# Make ------------------------------------------------------------------------------------
+
+ sf-make() { wrapper-simple    sf_make "$@"; }
+_sf-make() { _wrapper-complete sf_make     ; }
+complete -F _sf-make sf-make
+
+sf_make-command()   { _sf-bin make:command "$@"; }
+sf_make-migration() { sf_migration-make "$@"; }
+sf_make-entity()    { _sf-bin make:entity "$@"; }
+sf_make-fixture()   { _sf-bin make:fixture "$@"; }
+
+# Lists -----------------------------------------------------------------------------------
+
+ sf-list() { wrapper-simple    sf_list "$@"; }
+_sf-list() { _wrapper-complete sf_list     ; }
+complete -F _sf-list sf-list
+
+sf_list-parameters() {
+    declare cache
+
+    # -- Arguments --
+    declare flags="C" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+	declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME" "$(_sf-root -d)")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME"
+    else
+        _sf-bin debug:container --parameters --raw --no-ansi 2>/dev/null | grep -P '^\s{2}' | tail -n+2 | awk '{print $1}' | tee "$fa_cache"
+    fi
+}
+
+sf_list-tags() {
+    declare cache
+
+    # -- Arguments --
+    declare flags="C" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+	declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME" "$(_sf-root -d)")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME"
+    else
+        _sf-bin-no-logs debug:container --tags --no-ansi 2>/dev/null | grep '" tag' | sed 's:"::g; s:tag::; s: *::' | tee "$fa_cache"
+    fi
+}
+
+sf_list-entities() {
+    git-cd-root &&
+
+    grep -hoPR '(?<=class )\w+' src/Entity/ | sed 's: *::g'
+}
+
+sf_list-bundles() {
+    declare cache
+
+    # -- Arguments --
+    declare flags="C" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+	declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME" "$(_sf-root -d)")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME"
+    else
+        _sf-bin-json debug:container --parameter=kernel.bundles |
+            jq '.["kernel.bundles"] | keys[]' -r |
+                tee "$fa_cache"
+    fi
+}
+
+sf_list-consumers() {
+    sf_list-services "$@" | grep -P 'old_sound_rabbit_mq.+consumer$' | sed 's:old_sound_rabbit_mq\.::; s:_consumer::'
+}
+
+sf_list-events() {
+    declare cache
+
+    # -- Arguments --
+    declare flags="C" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+	declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME" "$(_sf-root -d)")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME"
+    else
+        _sf-bin-json debug:event-dispatcher | jq 'keys[]' -r | tee "$fa_cache"
+    fi
+}
+
+sf_list-services() {
+    declare cache
+
+    # -- Arguments --
+    declare flags="C" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+	declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME" "$(_sf-root -d)")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME"
+    else
+        _sf-bin debug:container --raw 2> /dev/null | awk '{print $1}' | grep -P '^\w' | tail -n+3 | tee "$fa_cache"
+    fi
+}
+
+sf_list-routes() {
+    declare cache
+
+    # -- Arguments --
+    declare flags="C" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            C) cache=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+	declare fa_cache
+            fa_cache="$(cache-file "$FUNCNAME" "$(_sf-root -d)")" || return 1
+
+    if [[ -n $cache ]]; then
+        cached-cmd "$fa_cache" "$FUNCNAME"
+    else
+        _sf-bin-json debug:router "$@" | jq -r '. | keys[]' |  tee "$fa_cache"
+    fi
+}
+
+# Fixtures --------------------------------------------------------------------------------
+
+sf-fixture-load() { _sf-bin doctrine:fixtures:load -n "$@"; }
+sf-fixture-make() {
+    declare entity="$1"
+    [[ -n $entity ]] && declare class="${entity}Fixtures"
+
+    shift 1
+
+    _sf-bin make:fixtures "$class" "$@";
+}
+
+# Entity ----------------------------------------------------------------------------------
+
+ sf-entity() { wrapper-simple    sf_entity "$@"; }
+_sf-entity() { _wrapper-complete sf_entity     ; }
+complete -F _sf-entity sf-entity
+
+sf_entity-regenerate()  { _sf-bin make:entity --regenerate --overwrite "$@"; }
+sf_entity-make()        { _sf-bin make:entity "$@"; }
+sf_entity-list()  { sf_list-entities "$@" ;}
+
+# Database --------------------------------------------------------------------------------
+
+ sf-db() { wrapper-simple    sf_db "$@"; }
+_sf-db() { _wrapper-complete sf_db     ; }
+complete -F _sf-db sf-db
+
+sf_db-drop-create() {
+    declare yes
+
+    # -- Arguments --
+    declare flags="y" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            y) yes=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    alert 'Will DROP and CREATE DATABASE!'
+    if [[ -z $yes ]] && ! annoying_ask "Proceed?"; then
+        echo 'Canceled'
+        return
+    fi
+
+    _sf-bin doctrine:database:drop --force --if-exists
+    _sf-bin doctrine:database:create
+}
+
+sf_db-recreate() {
+    sf_db-drop-create "$@" &&
+        sf_migration-migrate -y &&
+                sf-fixture-load
+}
+
+sf_db-recreate-migration-remake() {
+    sf_db-drop-create "$@" &&
+        sf_migration-make -r &&
+            sf_migration-migrate -y &&
+                 sf-fixture-load
+}
+
+# Events -----------------------------------------------------------------------------------
+
+sf-event-list()   { sf_list-events "$@" ;}
+
+sf-event-listeners() {
+    _sf-exec debug:event-dispatcher "$@"
+}
+
+
+# Migration --------------------------------------------------------------------------------
+
+ sf-migration() { wrapper-simple    sf_migration "$@"; }
+_sf-migration() { _wrapper-complete sf_migration     ; }
+complete -F _sf-migration sf-migration
+
+sf_migration-migrate() {
+    declare -a migration_opts
+    declare yes
+    # -- Arguments --
+    declare flags=":yYd" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            y|Y) yes=1                              ;;
+			  d) migration_opts+=(--dry-run)        ;;
+			  A) migration_opts+=(--all-or-nothing) ;;
+
+	          :) [[ -n ${OPTARG} ]] && migration_opts+=("-${OPTARG}")   ;;
+	          ?) [[ -n ${OPTARG} ]] && migration_opts+=("-${OPTARG}")   ;;
+	          *) echo "Unexpected: ${flag} ${OPTARG} ${OPTIND}"; return 1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    [[ -n $yes ]] && {
+        yes | _sf-bin doctrine:migrations:migrate "${migration_opts[@]}" "${params[@]}"
+    } || {
+        _sf-bin doctrine:migrations:migrate "${migration_opts[@]}" "${params[@]}"
+    }
+}
+
+_sf_migration-migrate() {
+	declare versions=(first latest prev current next)
+	versions+=($(sf_migration-list))
+
+	COMPREPLY=( $( compgen -W "${versions[*]}" -- "${COMP_WORDS[COMP_CWORD]}" ) );
+}
+complete -F _sf_migration-migrate sf_migration-migrate
+
+sf_migration-status() {
+    declare opts
+    opts="$@"
+
+    [[ ${#opts} -eq 0 ]] && opts=(--show-versions)
+
+    _sf-bin doctrine:migrations:status "${opts[@]}"
+}
+
+sf_migration-make() {
+    declare remake
+
+    # -- Arguments --
+    declare flags=":rR" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            r|R) remake=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    [[ -n $remake ]] && {
+		declare da_symfony
+                da_symfony="$(_sf-root -d)" || return 1;
+
+        da_migrations="$da_symfony/src/Migrations"
+
+        [[ ! -d $da_migrations ]] && {
+            echo 'Migration dir [$da_migrations] not found!'
+
+            return 1
+        }
+
+        find "$da_migrations" -iname "Version*" -delete
+    }
+
+    _sf-bin make:migration "${params[@]}"
+}
+
+sf_migration-list() {
+	declare da_symfony
+            da_symfony="$(_sf-root -d)" || return 1;
+
+    da_migrations="$da_symfony/src/Migrations"
+
+    [[ ! -d $da_migrations ]] && {
+        echo 'Migration dir [$$da_migrations] not found!'
+
+        return 1
+    }
+
+    declare files
+    # -- Arguments --
+    declare flags=":f" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            f) files=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    if [[ -n $files ]]; then
+        find "$da_migrations" -iname "Version*"
+    else
+        find "$da_migrations" -iname "Version*" -printf "%f\n" | sed 's:Version::;s:.php::'
+    fi
+}
+
+sf_migration-exec() {
+    _sf-bin doctrine:migrations:exec "$@"
+}
+
+_sf_migration-list() {
+    declare list="$(_sf-bin-migration-list)"
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -gt 0 ]] ; then
+        COMPREPLY=( $( compgen -W "${list}" -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+complete -F _sf_migration-list sf_migration-exec
+
+# Autocomplete -----------------------------------------------------------------------------
+
+symfony4-autocomplete() {
+    if which symfony-autocomplete > /dev/null 2>&1; then
+        # Don't remember
+        # if [[ $USYSTEM == 'mingw' ]]; then
+        #     echo "Skipping 'symfony4-autocomplete', USYSTEM='$USYSTEM'"
+        #
+        #     return
+        # fi
+
+        # declare fa_symfony_autocomplete="$COMPOSER_HOME/vendor/bamarni/symfony-console-autocomplete/bin/symfony-autocomplete"
+        # eval "$(php "$fa_symfony_autocomplete" --shell bash)"
+
+        eval "$(symfony-autocomplete --shell bash)"
+
+        if declare -f "_composer" > /dev/null; then
+            _composer() { _wrapper-complete     composer _composer-bin-complete -C; }
+            # _composer() { _wrapper-complete composer _symfony; }
+            complete -F _composer composer
+        fi
+
+        # complete -o default -F _symfony sf sf-help
+    fi
+}
+
+inst-symfony4-autocomplete() {
+    [[ ! -f $COMPOSER_BIN ]] && { echo "Install composer!" >&2; return 1; }
+
+    declare quite quite_opts
+    # -- Arguments --
+    declare flags="q" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+       if getopts "$flags" flag; then case $flag in
+            q) quite=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    [[ -n $quite ]] && quite_opts+=(-q)
+
+    composer-global-bin "${quite_opts[@]}"
+
+    if check-bin-not-exists symfony-autocomplete "${quite_opts[@]}"; then
+        composer global require bamarni/symfony-console-autocomplete
+        composer-global-bin "${quite_opts[@]}"
+    fi
+
+    if ! func-exists _symfony; then
+        symfony4-autocomplete
+    fi
+
+    [[ -z $quite ]] && echo "symfony-autocomplete is loaded!"
+
+    return 0
+}

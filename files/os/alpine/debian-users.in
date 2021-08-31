@@ -1,0 +1,193 @@
+# -- Users ----------------------------------------------------
+
+user-home() {
+    echo $(user-show $(id -un) | awk -F: '{print $6}');
+}
+
+user-sudo() {
+    declare user="$1"
+    declare myGroup="$(id -gn)"
+    declare sudo_opts=()
+
+    if [[ $user != 'root' ]]; then
+        if group-has-user "$myGroup" "$user"; then
+            sudo_opts+=(-E)
+        else
+            read -p "Add user '$user' to group '$myGroup'? [y/n]: "; echo
+            if [ "$REPLY" == "y" ] || [ "$REPLY" == "Y" ]; then
+                group-add-user "$myGroup" "$user"
+            fi
+
+            if group-has-user "$myGroup" "$user"; then
+                sudo_opts+=(-E)
+            fi
+        fi
+    else
+        sudo_opts+=(-E)
+    fi
+
+    IGNOREEOF=0 sudo "${sudo_opts[@]}" -u "$user" bash
+}
+
+alias user=user-sudo
+alias sudo-user=user-sudo
+
+complete -F _user-list user-sudo user sudo-user
+
+user-current-id() {
+    id
+}
+
+user-name-by-id() {
+    getent passwd | awk -F: -v "uid=$1" '$3 == uid { print $1 }'
+}
+
+user-in-group() {
+    groups "$1" | sed -r 's~^.+: ~~' | grep "$2" -q
+}
+
+user-show() {
+    declare user="$1"
+
+    getent passwd | awk -F: '$1=="'"$user"'" { print $0 }'
+}
+
+user-list() {
+    declare verbose
+    # -- Arguments --
+    declare flags="v" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+              v) verbose=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    getent passwd | { [[ -z $verbose ]] && awk -F: '{ print $1 }' || cat; }
+}
+
+alias user-ls=user-list
+
+_user-list() {
+    declare items="$(user-list)"
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -gt 0 ]] ; then
+        COMPREPLY=( $( compgen -W "${items}" -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+
+complete -F _user-list user-show id
+
+# -- Groups ----------------------------------------------------
+
+group-show() {
+    declare group="$1"
+
+    getent group | awk -F: '$1=="'"$group"'" { print $0 }'
+}
+
+group-list() {
+    declare verbose
+    # -- Arguments --
+    declare flags="v" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+              v) verbose=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    getent group | { [[ -z $verbose ]] && awk -F: '{ print $1 }' || cat; }
+}
+
+alias group-ls=group-list
+
+group-add-myself() {
+    declare group="$1"
+
+    [[ -z $group ]] && { echo 'Usage: group-add-myself <group>'; return 1; }
+
+    group-add-user "$group" $(whoami)
+}
+
+group-add-user() {
+    declare group="$1"
+    declare user="$2"
+
+    [[ -z $group || -z $user ]] && { echo "Usage: $FUNCTION <group> <user>"; return 1; }
+
+    sudo usermod -aG "$group" "$user"
+}
+
+
+group-has-user() {
+    declare group="$1"
+    declare user="$2"
+
+    [[ -z $group || -z $user ]] && { echo "Usage: $FUNCTION <group> <user>"; return 1; }
+
+    group-get-members "$group" | grep -q -w "$user"
+}
+
+group-get-members() {
+    group="$1"
+
+    user-list | while IFS=: read name trash
+    do
+        groups "$name" | sed -r 's~^.+: ~~' | grep -q -w "$group" && echo "$name"
+    done
+
+    return 0
+}
+
+
+function _group-user-list() {
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        declare items="$(group-list)"
+        COMPREPLY=( $( compgen -W "${items}" -- "$cur" ) )
+        return 0
+    fi
+
+    if [[ ${COMP_CWORD} -eq 2 ]] ; then
+        declare items="$(user-list)"
+        COMPREPLY=( $( compgen -W "${items}" -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+
+complete -F _group-user-list group-add-user group-has-user
+
+
+function _group-list() {
+    declare items="$(group-list)"
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -gt 0 ]] ; then
+        COMPREPLY=( $( compgen -W "${items}" -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+
+complete -F _group-list group-show group-get-members group-add-myself

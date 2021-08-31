@@ -1,0 +1,39 @@
+cd-home() { cd "$HOME"; }
+cd-home-real() { [[ -n $HOME_REAL ]] && cd "$HOME_REAL" || cd "$HOME"; }
+
+filepath() { echo "$1"; }
+
+cd-first() {
+	declare source="$(filepath "$1")"
+	declare dir="$source"
+
+	while [[ ! -d $dir ]]; do
+		[[ ! $dir =~ / ]] && break
+
+		dir=$(dirname "$dir")
+	done
+
+	[[ ! -d $dir ]] && { echo "Not found dir in [$source]"; return 1; }
+	[[ $dir == / ]] && { echo "Only root found [$source]"; return 1; }
+
+	cd "$dir"
+}
+
+cdf() { cd-first "$@"; }
+
+find-root() (
+    declare file="$(filepath "$1")"
+
+    while [ "$PWD" != '/' ]; do
+        [[ -e "$file" ]] && {
+            echo "$PWD/$file"
+            break;
+        }
+
+        cd ..
+    done
+
+    [ "$PWD" == '/' ] && { echo "No file [$file] is found!" >&2; exit 1; }
+
+    exit 0
+)

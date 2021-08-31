@@ -1,0 +1,25 @@
+# config/packages/dev/monolog.yaml
+monolog:
+    handlers:
+        console:
+            type: console
+            process_psr_3_messages: false
+            channels:
+                - '!php'
+                - '!event'
+                - '!%env(string:APP_NAME)%.tracing'
+
+        file:
+            type: stream
+            path: "%kernel.logs_dir%/app-%kernel.environment%.log"
+            level: debug
+            channels:
+                - '!php'
+                - '!event'
+
+        php:
+            type: stream
+            path: "%kernel.logs_dir%/php-%kernel.environment%.log"
+            level: debug
+            channels:
+                - 'php'

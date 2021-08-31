@@ -1,0 +1,3 @@
+dcc() { docker-compose "$@"; }
+complete -F _docker_compose dcc
+

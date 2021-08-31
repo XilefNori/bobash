@@ -1,0 +1,36 @@
+port-stat() {
+    {
+        netstat -ano -p TCP | tail -n+5 | awk '{print $2":"$1":"$5":"$3":"$4 }'
+        netstat -ano -p UDP | tail -n+5 | awk '{print $2":"$1":"$4":"$3":UDP"}'
+    } | sort -n -t':' -k 1 -k 2 |
+    awk -F: '{printf "%06d %15s:%-5s %s %15s:%-7s %s\n", $4, $1, $2, $3, $5, $6, $7}'
+}
+
+port-pid() {
+    local widpid pid port
+
+    port="$1"
+
+    widpid=$(port-stat | awk "\$2 ~ \":$port\" { printf \"%d\", \$1 }")
+    [ -z "$widpid" ] && return 1
+
+    pid=$(winpid2pid "$widpid")
+    [ -z "$pid" ] && return 1
+
+    echo $pid
+}
+
+port-test() {
+    local pid port
+    port="$1"
+
+    pid=`port-pid $port`
+
+    {
+        if [ -n "$pid" ]; then
+            echo "Tunnel by port $port is ON"; return 0;
+        else
+            echo "Tunnel by port $port is OFF"; return 1;
+        fi
+    } >&2
+}

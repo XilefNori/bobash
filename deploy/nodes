@@ -1,0 +1,8 @@
+# node         : channel : os     : host             : home-path
+
+default        :         : debian :                  : ~
+
+dc             : docker  : debian :                  : ~
+ssh            : ssh     : debian :                  : ~
+kube           : ssh     : debian :                  : ~
+box            : ssh     : debian : box              : ~

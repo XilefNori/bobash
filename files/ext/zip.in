@@ -1,0 +1,7 @@
+zip-folder() {
+    declare folder="$1"
+
+    zip -rd ${@:2} "${folder}.zip" "$folder"
+}
+
+complete -A directory zip-folder

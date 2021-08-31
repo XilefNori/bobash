@@ -1,0 +1,319 @@
+[user]
+#  name  = yourname
+#  email = yourname@email.ru
+
+[merge]
+  tool = vimdiff
+
+[mergetool]
+  keeptemporaries = false
+  keepbackups = false
+  prompt = false
+  trustexitcode = false
+
+[color]
+  diff = auto
+  status = auto
+  branch = auto
+  interactive = auto
+  ui = true
+
+[color "status"]
+  changed = blue bold
+  deleted = red
+  updated = green bold
+  untracked = yellow bold
+  branch = white bold
+  nobranch = red white bold
+
+[color "grep"]
+  # selected non-matching text in selected lines
+  # context non-matching text in context lines (when using -A, -B, or -C)
+  # filename filename prefix (when not using -h)
+  # function function name lines (when using -p)
+  # linenumber line number prefix (when using -n)
+  # match matching text
+  # selected non-matching text in selected lines
+  # separator separators between fields on a line (:, -, and =) and between hunks (--)
+  filename = blue bold
+  linenumber = green
+  match = red bold
+  separator = normal
+
+[alias]
+  cl = clone
+
+  co = checkout
+  cb = checkout -b
+
+  ci = commit
+  ca = commit --amend
+
+  amend        = "!f() { git commit --amend --no-edit --date=\"$(date -R)\" \"$@\"; }; f"
+  amend-time   = "!f() { git commit --amend --no-edit --date=\"$(date -R)\" \"$@\"; }; f"
+  amend-notime = commit --amend --no-edit
+
+  st = status --short --branch
+
+  br = branch
+  brl = branch -vv
+
+  ls = ls-files
+  cfg = config
+  cp = cherry-pick
+  rp = remote
+  rb = rebase
+
+  rs  = reset
+  rsh = reset --hard
+  rss = reset --soft
+  un  = reset HEAD --
+
+  ignore-perm = config core.fileMode false
+
+  h  = help
+  who = shortlog -sen
+
+  co-fetch = "!f() { echo '--- Fetching ---' && git fetch && git checkout \"$@\"; }; f"
+
+  wip = "!f() {                                                                      \
+    feat=\"$(git rev-parse --abbrev-ref HEAD)\";                                     \
+                                                                                     \
+    declare squash all message msg force;                                            \
+    declare -a git_opt;                                                              \
+                                                                                     \
+    declare flags='fsam:';                                                           \
+    declare OPTIND=1;                                                                \
+    declare -a params ;                                                              \
+    for (( ; OPTIND <= $#; )); do                                                    \
+        getopts '$flags' flag && { case $flag in                                     \
+            a) all=1                 ; ;;                                            \
+            s) squash=1              ; ;;                                            \
+            m) message=\"${OPTARG}\" ; ;;                                            \
+            f) force=1               ; ;;                                            \
+        esac; } || {                                                                 \
+            params+=(\"${!OPTIND}\"); ((OPTIND++));                                  \
+        };                                                                           \
+    done;                                                                            \
+                                                                                     \
+    if [[ -z $force && $feat == 'master' ]]; then                                    \
+        echo 'No wip on master!'; return 1;                                          \
+    fi;                                                                              \
+                                                                                     \
+    declare msg=\"$GIT_WIP_PREFIX $feat\";                                           \
+                                                                                     \
+    [[ -n $all     ]] && git_opt+=('-a')      ;                                      \
+    [[ -n $squash  ]] && git_opt+=('--amend') ;                                      \
+    [[ -n $message ]] && msg=\"$msg: $message\" ;                                    \
+                                                                                     \
+    echo git commit \"${git_opt[@]}\" -m \"$msg\";                                   \
+    git commit \"${git_opt[@]}\" -m \"$msg\";                                        \
+    git status -sb;                                                                  \
+                                                                                     \
+  }; f";
+
+  origin-head-on-master-push = "!f() {                         \
+    local br=\"$1\";                                           \
+    [ -z $br ] && br=\"$(git rev-parse --abbrev-ref HEAD)\";   \
+                                                               \
+    if [ $br = 'master' ]; then                                \
+      echo \"Current branch $br is master!\";                  \
+                                                               \
+      return 1;                                                \
+    fi;                                                        \
+                                                               \
+    git co-fetch \"$br\" -f &&                                 \
+    git origin              &&                                 \
+    git head-on-master      &&                                 \
+    git push -f             &&                                 \
+    git l -10;                                                 \
+  }; f"
+
+  head-on-master  = "!f() {                                                                     \
+    local br=\"$1\";                                                                            \
+    [ -z $br ] && br=\"$(git rev-parse --abbrev-ref HEAD)\";                                    \
+                                                                                                \
+    if [ $br = 'master' ]; then                                                                 \
+      echo \"Current branch $br is master!\";                                                   \
+                                                                                                \
+      return 1;                                                                                 \
+    fi;                                                                                         \
+                                                                                                \
+    git co-fetch $br                                                   &&                       \
+    git checkout master                                                &&                       \
+    echo '--- Rebase Master on Origin ---' && git rebase origin/master &&                       \
+    git checkout $br                                                   &&                       \
+    echo '--- Rebase on Master ---' && git rebase master     || {                               \
+      echo "--- Aborting to \"$br\" ---" && git rebase --abort && git checkout --force \"$br\"; \
+      return 1;                                                                                 \
+    };                                                                                          \
+  }; f"
+
+  head = "!f() { \
+    echo '-- Reset --'                 && \
+    git clean -fd                      && \
+    git reset --hard HEAD              && \
+    echo '-- Update --'                && \
+    git pull --ff-only                 && \
+    echo '-- Status --'                && \
+    git status --short --branch \"$@\"  ; \
+  }; f"
+
+  origin = "!f() {                                   \
+    local br=\"$(git rev-parse --abbrev-ref HEAD)\"; \
+    echo "-- Clearing --"                         && \
+    git clean -fd                                 && \
+    echo "-- Reset to origin/$br --"              && \
+    git fetch && git reset --hard "origin/$br";      \
+    echo '-- Status --'                &&            \
+    git status --short --branch         ;            \
+  }; f"
+
+  # amend-revert = "!f() { \
+  #   echo '-- Reset --'                 && \
+  #   git reset --soft HEAD~             && \
+  #   git stash                          && \
+  #   git reset --hard HEAD@{1}          && \
+  #   echo '-- Update --'                && \
+  #   git stash pop                      && \
+  # }; f"
+
+
+  # Diff ---------------------------------------------------------------------------------------
+
+  dic = diff --name-only --diff-filter=U
+  di  = diff
+  dc  = diff --cached
+  edi = diff --ignore-space-at-eol
+  edc = diff --ignore-space-at-eol --cached
+  dit = diff --name-status
+  dct = diff --name-status --cached
+  din = diff --name-only
+  dcn = diff --name-only   --cached
+
+  # Remotes ------------------------------------------------------------------------------------
+
+  pp  = "!f() { echo '--- Pull ---' && git pull && echo '--- Push ---' && git push; }; f"
+
+  # Commits ------------------------------------------------------------------------------------
+
+  drop = reset --hard HEAD~1
+  ff = merge --ff-only
+
+  # Accept ----------------------------------------------------------------------------------------
+
+  accept-ours   = "!f() { git checkout --ours   -- \"${@:-.}\"; git add -u \"${@:-.}\"; }; f"
+  accept-theirs = "!f() { git checkout --theirs -- \"${@:-.}\"; git add -u \"${@:-.}\"; }; f"
+
+  # Log ----------------------------------------------------------------------------------------
+
+  plog = log --pretty=format:\"%C(yellow)%h%Creset %<(15,trunc)%ad [%C(green bold)%<(15)%an%Creset]%C(blue bold)%d%Creset '%s'\" --date=relative
+  lg   = log --pretty=format:\"%C(yellow)%h%Creset %<(15,trunc)%ad [%C(green bold)%<(15)%an%Creset]%C(blue bold)%d%Creset '%s'\" --date=relative
+
+  l    = log --pretty=format:\"%C(yellow)%h%Creset %<(12,trunc)%ad %C(green bold)%<(12)%an%Creset%C(blue bold)%d%Creset '%s'\" --date=relative
+  ld   = log --pretty=format:\"%C(yellow)%h%Creset %<(25,trunc)%ad %C(green bold)%<(12)%an%Creset%C(blue bold)%d%Creset '%s'\" --date=iso
+  ll   = log --pretty=format:\"%C(yellow)%h%Creset %<(12,trunc)%ad %C(green bold)%<(12)%an%Creset%C(blue bold)%d%Creset '%s'\" --date=relative --name-only
+  lt   = log --pretty=format:\"%C(yellow)%h%Creset %<(12,trunc)%ad %C(green bold)%<(12)%an%Creset%C(blue bold)%d%Creset '%s'\" --date=relative --name-status
+
+  lm   = "!f() { git l --author=\"$(git config user.name)\" \"$@\"; }; f"
+
+  lr   = log -g --pretty=format:\"%C(yellow)%h%Creset %gd: %C(blue bold)%d%Creset '%s'\" --date=iso
+  rlog = log -g --pretty=format:\"%C(yellow)%h%Creset %gd: %C(blue bold)%d%Creset '%s'\" --date=iso
+
+  last = log -1 --stat
+  loga = log --pretty=oneline --abbrev-commit --all
+
+  hist = log --pretty=format:\"%C(yellow)%<(10,trunc)%h%Creset %ad [%C(green bold)%<(15)%an%Creset]%C(blue bold)%d%Creset '%s'\" --graph --date=iso --all
+
+  log-my  = "!f() { git log  --author=\"$(git config user.name)\" \"$@\"; }; f"
+  plog-my = "!f() { git plog --author=\"$(git config user.name)\" \"$@\"; }; f"
+  hist-my = "!f() { git hist --author=\"$(git config user.name)\" \"$@\"; }; f"
+
+  look    = "!f() { git plog --grep \"$@\"; }; f"
+  look-in = "!f() { git plog -S     \"$@\"; }; f"
+
+  # Branch Info -------------------------------------------------------------------------------
+
+  br-recent = "!f() {                                                                          \
+    local c=$1                                                                              ;\
+    [ -z "$c" ] && c=5                                                                        ;\
+                                                                                               \
+    git for-each-ref --count=$c --sort=-committerdate refs/heads/ --format='%(refname:short)' ;\
+  }; f"
+
+  br-tracking = rev-parse --abbrev-ref --symbolic-full-name @{u}
+
+  br-list = branch -vv
+
+  what = rev-parse --abbrev-ref HEAD
+
+  # Stashing ----------------------------------------------------------------------------------
+
+  slist  = "!f() { git stash list stash^{/$*}; }; f"
+  sshow  = "!f() { git stash show stash^{/$*}; }; f"
+  sapply = "!f() { git stash apply stash^{/$*}; }; f"
+
+  # User --------------------------------------------------------------------------------------
+
+  user = "!f() {\
+    local user=(\"$(git config user.email)\" \"$(git config user.name)\") ;\
+    echo "user.email: ${user[0]}"                                           ;\
+    echo "user.name : ${user[1]}"                                           ;\
+  }; f"
+
+  # Patching ----------------------------------------------------------------------------------
+
+  fp = format-patch
+
+  br-patch = "!f() {                                        \
+    local range                                            ;\
+    local commit=\"$1\"                                    ;\
+    local branch=\"$(git rev-parse --abbrev-ref $commit)\" ;\
+                                                            \
+    [ -n \"$branch\" ] && {                                 \
+        range=\"$branch\"                                  ;\
+    } || {                                                  \
+        range=\"${commit}~..${commit}\"                    ;\
+    }                                                      ;\
+                                                            \
+    git format-patch --stdout $range \"${@:2}\"            ;\
+  }; f"
+
+  br-apply = "!f() { git br-patch \"$@\" | git apply; }; f"
+
+  # br-apply = "!f() { git format-patch --stdout \"$@\" | git apply; }; f"
+
+  # Files info --------------------------------------------------------------------------------
+
+  find      = "!f() { git l --diff-filter=A --all --name-only \"$@\"; }; f"
+
+  ls-find   = log --diff-filter=A --all --name-only
+  ls-added  = log --diff-filter=A
+
+  # Show files ignored by git:
+  ls-un   = ls-files --other --exclude-standard
+  ls-ign  = ls-files -o -i --exclude-standard
+
+  tag-list-version =  tag -l --sort=-version:refname "v*"
+
+  type = cat-file -t
+  dump = cat-file -p
+
+  nopush = log origin/master..HEAD
+  reword = -c sequence.editor=\"sed -i s/pick/reword/\" rebase -i
+
+  # plog = log --pretty=format:'%h %cr %Cblue%cn%Creset %Cgreen%s'
+  # mylog = "!git log --pretty=format:'%h|%an|%s' -10 | awk -F '|' '{ printf \"%s %-20s %s\n\", $1, $2, $3 }'"
+  # mylog = "!f() { git log --pretty=format:'%h|%cr|%cn|%s' -10 | while IFS='|' read hash author time message; do printf '%s %s %-20s %s\"\n\"' \"$hash\" \"$author\" \"$time\" \"$message\"; done; } f"
+
+[push]
+  default = current
+[core]
+  pager = less -x4 -M -X -F
+  # pager = less -x4 +Gg
+  # safecrlf = true
+  autocrlf = input
+  #fileMode = false
+  #trustctime = false
+[pull]
+  rebase = true

@@ -1,0 +1,47 @@
+sample-read-stdin() {
+    array=()
+    while IFS= read -r -p "Next item (end with an empty line): " line; do
+        [[ $line ]] || break  # break if line is empty
+        array+=("$line")
+    done
+
+    printf '%s\n' "Items read:"
+    printf '«%s»\n' "${array[@]}"
+}
+
+sample-cat-echo () {
+    if read -t 0; then
+        cat
+    else
+        echo "$*"
+    fi
+}
+
+
+sample-check-input() {
+    ! read -t 0 && echo 'You must pipe input' || cat
+}
+
+sample-history-no() {
+    set +o history; history -d $(history | sed -n '$s/\s*\([0-9]*\)\s*.*$/\1/p')
+}
+
+sample-stdin() {
+    [ -t 0 ] && echo 'You must pipe input' || cat
+}
+
+sample-trap-kill() {
+    echo 'Starting background process ...'
+    trap-kill-me.sh 'Hello world!' &
+    pid="$!"
+
+    wait=3
+
+    echo "Waiting $wait seconds ..."
+    sleep $wait
+
+    echo 'Sendng TERM signal ...'
+    sleep 1
+
+    kill -TERM $pid
+}

@@ -1,0 +1,78 @@
+SSH_DIR="$HOME/.ssh"
+SSH_ENV_ID="$(uname -s)-${RELEASE_STR}"
+SSH_ENV="$SSH_DIR/$SSH_ENV_ID.env"
+SSH_BIN_DIR=/usr/bin
+SSH_KEY_DIR="$SSH_DIR/keys"
+
+export SSH_ENV
+
+ssh-agent-start() {
+    echo -n "Initialising new SSH agent... "
+
+    declare fa_sock="$SSH_DIR/ssh-auth-$SSH_ENV_ID.sock"
+
+    [[ -e "$fa_sock" ]] && rm -f "$fa_sock"
+
+    "$SSH_BIN_DIR/ssh-agent" -a "$fa_sock"  > ${SSH_ENV} || {
+        return $?
+    }
+
+    chmod 600 "${SSH_ENV}"
+    source "${SSH_ENV}" > /dev/null
+
+    echo 'succeeded'
+}
+
+ssh-agent-restart() {
+    ssh-agent -k
+    ssh-agent-start
+}
+
+ssh-agent-add() {
+    if [[ "$#" == 0 ]]; then
+        find "$SSH_KEY_DIR/" -name '*.pub' -printf '%f\n' | sed -r 's/\.pub$//' | sort
+
+        return
+    fi
+
+	/usr/bin/ssh-add "$SSH_KEY_DIR/$1"
+}
+
+complete -F _complete-cmd ssh-agent-add
+
+# ssh-agent-add-group() {
+#     if [[ "$#" == 0 ]]; then
+#         find "$SSH_KEY_DIR/" -name '*.pub' -printf '%f\n' | sed -r 's/\.pub$//' | sort
+#         return
+#     fi
+#     declare pass=''
+#     read -sp 'Enter password: ' pass
+#     for i in `find ~/.ssh/keys/ -name "*.pub"`; do
+#        declare key_file="${i%.pub}"
+# 		/usr/bin/ssh-add "$SSH_KEY_DIR/$1"
+#        ssh-add.exp "$key_file" "$pass"
+#     done
+# }
+# complete -F _complete-cmd ssh-agent-add-group
+
+ssh-agent-connect() {
+    [[ -f "${SSH_ENV}" ]] && source "${SSH_ENV}" > /dev/null
+}
+
+ssh-agent-exist() {
+    ssh-agent-connect
+
+    command ps -e | grep ${SSH_AGENT_PID} | grep -qP '\bssh-agent\b'
+    declare r=$?
+
+    [[ $r -ne 0 ]] && {
+        echo "ssh-agent ${SSH_AGENT_PID} not found" >&2
+    }
+
+    return $r
+}
+
+ssh-agent-show() {
+    echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
+    ssh-add -l
+}

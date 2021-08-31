@@ -1,0 +1,15 @@
+inst-composer() {
+    check-bin-not-exists composer || return 1
+
+    pushd $HOME/bin
+        curl -sS https://getcomposer.org/installer | php &&
+        mv composer.phar composer
+
+        bobash-module composer
+    popd
+}
+
+inst-composer-parallel() {
+    composer-global-install hirak/prestissimo "$@"
+}
+

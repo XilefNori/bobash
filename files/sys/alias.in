@@ -1,0 +1,82 @@
+alias-complete b  bobash
+alias-complete c  composer
+alias-complete d  dcrk
+alias-complete dc dcc
+alias-complete dm dcrk-machine
+alias-complete f  find
+alias-complete g  'grep -i'
+alias-complete h  hh
+alias-complete i  inst
+alias          j='jobs -l'
+alias-complete k  kube
+alias-complete l  less
+alias-complete n  nn
+alias-complete r  rpn
+alias-complete s  sf
+
+if which systemctl >& /dev/null; then
+    alias-complete y systemctl
+fi
+
+alias-complete t  try
+alias-complete v  vagrant
+alias-complete w  wrapper
+alias-complete x  xdebug
+
+alias-complete gl gitlab
+
+alias py=python
+alias wp=webpack
+
+alias grep='grep -a'
+alias cgrep='grep --color=always'
+
+alias root='sudo -E bash'
+
+alias man=mans
+
+# alias cls='cat ~/.cls'
+# alias cls="echo -n $'\033'[[2J"
+alias cls="echo -n $'\033'c"
+
+# cd aliases
+alias св=cd
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias .....='cd ../../../..'
+
+# ls aliases
+alias ls='ls -h --color=auto --group-directories-first'
+alias l.='ls -d .[a-zA-Z]*'
+alias la='ls -A'
+alias ll='ls -lA'
+alias lx='ls -lXB'              # сортировка по расширениі
+alias lk='ls -lSr'              # сортировка по размеру
+alias lc='ls -lcr'              # сортировка по времени изменения
+alias lu='ls -lur'              # сортировка по времени последнего обращения
+alias lr='ls -lR'               # рекурсивный обход подкаталогов
+alias lt='ls -ltr'              # сортировка по дате
+alias lm='ls -al | less'        # вvвод через 'more'
+# alias l='ls -lA $LS_OPTIONS'
+
+alias tree='tree -C'
+# alias sed='sed -r'
+
+# filesystem modification aliases
+# alias cp='cp -i'
+alias md='mkdir -p'
+alias mv='mv -i'
+alias rd='rmdir'
+alias rm='rm -i'
+
+# Alias chmod commands
+alias 000='chmod 000'
+alias 644='chmod 644'
+alias 755='chmod 755'
+
+# more aliases
+alias pe='printenv'
+alias type='type -a'  # where, of a sort
+
+alias wget='wget --user-agent "Mozilla/5.0" --continue --timestamping --no-parent --timeout=10 --wait=7 --tries=10 --no-directories'

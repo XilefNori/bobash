@@ -1,0 +1,42 @@
+if [[ -d "$DIR_TOOLS/PortableGit" ]]; then
+	GIT_WINDOWS_DIR="$DIR_TOOLS/PortableGit"
+else
+	GIT_WINDOWS_DIR="/cygdrive/c/Program Files/Git"
+fi
+
+GIT_WINDOWS_PATH="$GIT_WINDOWS_DIR/bin"
+GIT_WINDOWS_PATH_USR="$GIT_WINDOWS_DIR/usr/bin"
+
+git-windows-version() {
+	{
+		git --version
+		which git
+	} | awk -v ORS=' ' '{ print }'
+	echo ''
+}
+
+git-windows-on() {
+	# git() {
+	# 	"$GIT_WINDOWS_PATH/git" "$@"
+	# }
+
+	path-add "$GIT_WINDOWS_PATH" "$GIT_WINDOWS_PATH_USR"
+	git-version
+}
+
+git-windows-off() {
+	# unset -f "git"
+
+	path-rm "$GIT_WINDOWS_PATH" "$GIT_WINDOWS_PATH_USR"
+	git-version
+}
+
+git-windows() {
+	git --version | grep windows -q && {
+		git-windows-off
+	} || {
+		git-windows-on
+	}
+}
+
+# git-windows-on > /dev/null

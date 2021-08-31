@@ -1,0 +1,109 @@
+# PS1 ----------------------------------------------------------------------------
+
+git_ps1_parse_dirty() {
+  [[ $(command git status 2> /dev/null | tail -n1) != "nothing to commit (working directory clean)" ]] && echo "*"
+}
+
+git_ps1_parse_branch() {
+  { command git branch --no-color 2> /dev/null || return; } | sed -e '/^[^*]/d' -e "s/* \(.*\)/[\1$(git_ps1_parse_dirty)]/"
+}
+
+git-has-local-chages() {
+    declare re=^'nothing to commit'
+
+    [[ ! $(command git status 2> /dev/null | tail -n1) =~ $re ]]
+}
+
+git_ps1_parse_state() {
+    declare br="$(command git rev-parse --abbrev-ref HEAD 2> /dev/null)"
+
+    if [[ -n $br ]]; then
+        declare changes discrepancy origin
+
+        # -- Arguments --
+        declare flags="cdo" OPTIND=1
+        declare -a params
+        for (( ; OPTIND <= $#; )) do
+            if getopts "$flags" flag; then case $flag in
+                c) changes=1 ;;
+                d) discrepancy=1 ;;
+                o) origin=1 ;;
+            esac; else
+                params+=("${!OPTIND}"); ((OPTIND++))
+            fi
+        done
+
+        declare format='[%s]'
+        declare state=''
+
+        [[ -n $discrepancy ]] && {
+            declare upstream="$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2> /dev/null)"
+            if [[ -n $upstream ]]; then
+                declare discrepancy="$(git status -sb | head -1 | grep -Po '\[[^]]+\]')"
+                declare behind="$(echo "$discrepancy" | grep -oP '(?<=behind )\d+')"
+                declare ahead="$(echo "$discrepancy" | grep -oP '(?<=ahead )\d+')"
+
+                [[ -n $ahead  ]] && { [[ $ahead  -gt 9 ]] && ahead="$N_REPO_LINE_SIGN_AHEAD"; ahead="${N_REPO_LINE_COLOR_AHEAD}${ahead}${NC}"  ; } || ahead='.'
+                [[ -n $behind ]] && { [[ $behind -gt 9 ]] && behind="$N_REPO_LINE_SIGN_BEHIND"; behind="${N_REPO_LINE_COLOR_BEHIND}${behind}${NC}"; } || behind='.'
+            else
+                ahead="$N_REPO_LINE_SIGN_NOUPSTREAM"
+                behind="$N_REPO_LINE_SIGN_NOUPSTREAM"
+            fi
+
+            format='[%s %s]'
+            state="$state$ahead$behind"
+        }
+
+        [[ -n $changes ]] && {
+            declare changes=.
+
+            declare files_modified=$(command git status --untracked-files=no --porcelain | head -n1 | wc -l)
+            declare files_untracked=$(command git ls-files --others --exclude-standard | head -1 | wc -l)
+
+            if [[ $files_untracked -eq 1 && $files_modified -eq 0 ]]; then
+                changes=${N_REPO_LINE_COLOR_UNTRACKED}U${NC}
+            elif [[ $files_untracked -eq 1 && $files_modified -eq 1 ]]; then
+                changes=${N_REPO_LINE_COLOR_MOD_UNTRACKED}M${NC}
+            elif [[ $files_untracked -eq 0 && $files_modified -eq 1 ]]; then
+                changes=${N_REPO_LINE_COLOR_MODIFIED}M${NC}
+            else
+                changes=.
+            fi
+
+            format='[%s %s]'
+            state="$state$changes"
+        }
+
+        declare -a printf_opts
+        [[ -n "$state" ]] && printf_opts+=("$state")
+        printf_opts+=("${br::40}")
+
+        line="$(printf -- "$format" "${printf_opts[@]}")"
+
+        [[ -n $origin ]] && {
+            origin="$(command git ls-remote --get-url origin)"
+
+            line="$line ($origin)"
+        }
+
+        printf -- "%s" "$line"
+    fi
+}
+
+git_ps1_show_origin() {
+    ! which git > /dev/null &&  { echo "$FUNCNAME: No git installed" >&2 ; return 1; }
+
+    ps1_show() { git_ps1_parse_state -cdo; }
+}
+
+git_ps1_show_state() {
+    ! which git > /dev/null &&  { echo "$FUNCNAME: No git installed" >&2 ; return 1; }
+
+    ps1_show() { git_ps1_parse_state -cd; }
+}
+
+git_ps1_show_branch() {
+    ! which git > /dev/null &&  { echo "$FUNCNAME: No git installed" >&2 ; return 1; }
+
+    ps1_show() { git_ps1_parse_state; }
+}

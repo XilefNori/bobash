@@ -1,0 +1,113 @@
+tar-stdin() {
+    declare -a tar_opts
+    declare ext
+
+    # -- Arguments --
+    declare flags="jzZ" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            z) tar_opts+=(-$flag); ext='tgz'          ;;
+            j) tar_opts+=(-$flag); ext='tbz'          ;;
+            Z) tar_opts+=(-$flag); ext='tar.compress' ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    [[ -z $tar_opts ]] && { tar_opts+=(-z); ext='tgz'; }
+
+    declare file="${params[0]}"
+
+    [[ -z $file ]] && file='backup'
+    [[ ! $file =~ \.$ext$ ]] && file="$file.$ext"
+
+    xargs tar -c "${tar_opts[@]}" -f "$file"
+}
+
+untar2dir() {
+    declare da_dir
+    # -- Arguments --
+    declare flags="d:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            d) da_dir="${OPTARG}" ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    declare fa_file="${params[0]}"
+
+    [[ -z ${da_dir} ]] && da_dir="${fa_file%.*}"
+
+    mkdir -p "$da_dir" || { echo "Cannot create dir [$da_dir]!" ; return 1; }
+
+    echo "Extracting [$fa_file] -> [$da_dir] ..."
+
+    simple_ask 'Proceed?' || { echo 'Aborted!'; return 1; }
+
+    declare tar_opts=()
+
+    case ${fa_file##*.} in
+        bz2|BZ2|tbz|TBZ|tbz2|TBZ2) tar_opts+=(--bzip2)    ;;
+        gz|GZ|tgz|TGZ)             tar_opts+=(--gzip)     ;;
+        Z|z)                       tar_opts+=(--compress) ;;
+    esac;
+
+    if which pv > /dev/null 2>&1; then
+        pv -p -N 'Extracting ... ' "$fa_file" | tar "${tar_opts[@]}" -x -C "$da_dir"
+    else
+        tar -f "${fa_file}" "${tar_opts[@]}" -x -C "$da_dir"
+    fi
+}
+
+complete -f -X '!*.@(tgz|tbz|tbz2|tar.gz|tar.bz2)' untar2dir
+
+tar-dir() {
+    declare -a tar_opts
+    declare ext tool
+
+    # -- Arguments --
+    declare flags="jzZ" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            z) tar_opts+=(--gzip    ); tool=gzip     ; ext='tgz'          ;;
+            j) tar_opts+=(--bzip2   ); tool=bzip2    ; ext='tbz'          ;;
+            Z) tar_opts+=(--compress); tool=compress ; ext='tar.compress' ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    echo params: ${params[@]}
+
+    [[ -z ${tar_opts} ]] && { tar_opts+=(--gzip); tool=gzip; ext='tgz'; }
+
+    declare da_source_dir="${params[0]}"
+    declare da_target_dir="${params[1]}"
+
+    [[ -z $da_target_dir ]] && da_target_dir=$(dirname ${da_source_dir})
+
+    fr_target_name=$(basename ${da_source_dir}).$ext
+
+    declare fa_archive="${da_target_dir%/}/$fr_target_name"
+    declare size_dir=$(du --apparent-size -sk "$da_source_dir" | cut -f 1)
+
+    echo "Taring: $da_source_dir (${size_dir}k) -> $fa_archive"
+
+    simple_ask 'Proceed?' || { echo 'Aborted!'; return $((128 + 2 )); }
+
+    if which pv > /dev/null 2>&1; then
+        tar -c -f- "$da_source_dir"  | pv -p -N 'Creating tar ... ' -f -s "${size_dir}k"  | "$tool" -c > "$fa_archive"
+    else
+        tar -c "${tar_opts[@]}" -f "$fa_archive" "$da_source_dir"
+    fi
+
+    declare size_archive=$(du --apparent-size -sk "$fa_archive" | cut -f 1)
+    echo "Created: $fa_archive (${size_archive}k)"
+}
+
+complete -A directory tar-dir

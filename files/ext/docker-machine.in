@@ -1,0 +1,289 @@
+[[ -z $DOCKER_MACHINE_DIR ]] && DOCKER_MACHINE_DIR=~/.docker-machine
+
+# --------------------------------------------------------------
+
+dm-cfg()  {  var-cfg "DOCKER_MACHINE" "$@"; }
+_dm-cfg() { _var-cfg "dm-cfg"             ; }
+complete -F _dm-cfg dm-cfg
+
+ dcrk-machine() { wrapper-help-command  dm docker-machine  "$@" ; }
+_dcrk-machine() { _wrapper-complete     dm _docker_machine      ; }
+complete -F _dcrk-machine dcrk-machine
+
+# --------------------------------------------------------------
+
+dm-ip() {
+  declare machine="$1"
+  [[ -n $machine ]] || { echo "Set machine name" >&2; return 1; }
+
+  docker-machine inspect "$machine" | jq .Driver.IPAddress -r
+}
+
+dm-list-machine() {
+	docker-machine ls --format '{{.Name}}'
+}
+
+dm-host-update() {
+  declare machine="$1"
+  [[ -n $machine ]] || { echo "Set machine name" >&2; return 1; }
+
+  declare fa_hosts=/etc/hosts
+
+  echo "Updating $fa_hosts file ..."
+
+  {
+    declare ip="$(dm-ip "$machine")"
+
+    sed "/${machine}\$/d" "$fa_hosts"
+
+    echo "$ip $machine"
+
+  } | sudo sponge "$fa_hosts" && {
+    dm-host-check "$machine"
+  }
+}
+
+dm-host-check() {
+  declare verbose
+  # -- Arguments --
+  declare flags="v" OPTIND=1
+  declare -a params
+  for (( ; OPTIND <= $#; )) do
+      getopts "$flags" flag && { case $flag in
+          v) verbose=1 ;;
+      esac; } || {
+          params+=("${!OPTIND}"); ((OPTIND++))
+      }
+  done
+
+
+  declare machine="${params[0]}"
+  [[ -z $machine ]] && machine="$(dm-current-get)"
+  [[ -n $machine ]] || { echo "Set machine name" >&2; return 1; }
+
+  echo "Host '$machine' availability checking ..."
+
+  [[ $verbose -gt 1 ]] && echo ping $machine -c 2 -t 1
+
+  ping $machine -c 2 -t 1 | {
+    [[ $verbose -gt 1 ]] && cat || cat > /dev/null
+  }
+
+  declare r=${PIPESTATUS[0]}
+
+  if [[ $r -eq 0 ]]; then
+    echo "Host '$machine' is available!"
+  else
+    echo "Host '$machine' is NOT found!"
+  fi
+
+  return $r
+}
+
+[[ -z $DOCKER_MACHINE_AUTO_EVAL ]] && DOCKER_MACHINE_AUTO_EVAL=1
+
+_dm-start-before() {
+  echo  "Disconnecting VPN before starting machine ..."
+  /opt/cisco/anyconnect/bin/vpn disconnect
+}
+
+dm-start() {
+  declare eval=$DOCKER_MACHINE_AUTO_EVAL
+
+  # -- Arguments --
+  declare flags="eE" OPTIND=1
+  declare -a params
+  for (( ; OPTIND <= $#; )) do
+      getopts "$flags" flag && { case $flag in
+          e) eval=1 ;;
+          E) eval=0 ;;
+      esac; } || {
+          params+=("${!OPTIND}"); ((OPTIND++))
+      }
+  done
+
+  declare machine="${params[0]}"
+  [[ -z $machine ]] && machine="$(dm-current-get)"
+  [[ -n $machine ]] || { echo "Set machine name" >&2; return 1; }
+
+
+  if [[ Running == $(docker-machine status "$machine") ]]; then
+    echo "Machine '$machine' is already running"
+  else
+     _dm-start-before
+     docker-machine start "$machine"
+  fi
+
+  [[ Running == $(docker-machine status "$machine") ]] && {
+        dm-host-check  "$machine" ||
+        dm-host-update "$machine"
+  } && {
+    if [[ $eval -gt 0 ]]; then
+      dm-eval "$machine"
+    fi
+  } && 
+
+  [[ Running == $(docker-machine status "$machine") ]]
+}
+
+dm-stop() {
+  declare machine="$1"
+  [[ -z $machine ]] && machine="$(dm-current-get)"
+  [[ -n $machine ]] || { echo "Set machine name" >&2; return 1; }
+
+  docker-machine stop "$machine"
+
+  [[ Stopped == $(docker-machine status "$machine") ]]
+
+  unset DOCKER_TLS_VERIFY
+  unset DOCKER_HOST
+  unset DOCKER_CERT_PATH
+  unset DOCKER_MACHINE_NAME
+}
+
+[[ -z $DOCKER_MACHINE_CREATE_ADD_SSH_CONFIG ]] && DOCKER_MACHINE_CREATE_ADD_SSH_CONFIG=1
+[[ -z $DOCKER_MACHINE_CREATE_USE_NFS        ]] && DOCKER_MACHINE_CREATE_USE_NFS=1
+[[ -z $DOCKER_MACHINE_CREATE_MEMORY         ]] && DOCKER_MACHINE_CREATE_MEMORY=4096
+[[ -z $DOCKER_MACHINE_CREATE_CPU            ]] && DOCKER_MACHINE_CREATE_CPU=2
+[[ -z $DOCKER_MACHINE_CREATE_DISK           ]] && DOCKER_MACHINE_CREATE_DISK=32768
+
+[[ -z $DOCKER_MACHINE_AUTO_START ]] && DOCKER_MACHINE_AUTO_START=1
+
+dm-create() {
+    declare memory cpu disk
+    declare start=$DOCKER_MACHINE_AUTO_START
+
+    # -- Arguments --
+    declare flags="Ssm:d:c:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            c) cpu="${OPTARG}"     ;;
+            m) memory="${OPTARG}"  ;;
+            d) disk="${OPTARG}"    ;;
+            s) start=1 ;;
+            S) start=0 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    [[ -z $memory ]] && memory=$DOCKER_MACHINE_CREATE_MEMORY
+    [[ -z $cpu    ]] && cpu=$DOCKER_MACHINE_CREATE_CPU
+    [[ -z $disk   ]] && disk=$DOCKER_MACHINE_CREATE_DISK
+
+    declare machine="${params[0]}"
+    [[ -n $machine ]] || { echo "Set machine name" >&2; return 1; }
+
+    declare dm_opts=(
+      --driver=virtualbox            \
+      --virtualbox-memory="$memory"  \
+      --virtualbox-cpu-count="$cpu"  \
+      --virtualbox-disk-size="$disk" \
+    )
+
+    echo docker-machine create "${dm_opts[@]}" "$machine"
+         docker-machine create "${dm_opts[@]}" "$machine" &&
+
+    if [[ $DOCKER_MACHINE_CREATE_USE_NFS -gt 0 ]]; then
+        echo docker-machine-nfs "$machine"
+             docker-machine-nfs "$machine"
+    fi &&
+
+    if [[ $DOCKER_MACHINE_CREATE_ADD_SSH_CONFIG -gt 0 ]]; then
+        echo dm-ssh-config-add "$machine"
+             dm-ssh-config-add "$machine"
+    fi
+
+    if [[ $start -gt 0 ]]; then
+      dm-start "$machine"
+    fi
+}
+
+dm-eval() {
+	declare machine="$1"
+  [[ -z $machine ]] && machine="$(dm-current-get)"
+  [[ -n $machine ]] || { echo "Set machine name" >&2; return 1; }
+
+  if [[ $(docker-machine status "$machine") != 'Running' ]]; then
+    echo "Machine '$machine' not running!"
+
+    return 1
+  fi
+
+
+
+	eval $(docker-machine env "$machine") &&
+  {
+    dm-current-save "$machine"
+    echo "Docker connected to machine '$machine'"
+  } ||
+  echo "Error on connecting docker to machine '$machine'"
+}
+
+dm-current-save() {
+  declare machine="$1"
+  [[ -n $machine ]] || { echo "Set machine name" >&2; return 1; }
+
+  mkdir -p "$DOCKER_MACHINE_DIR"
+  echo -n "$machine" > "$DOCKER_MACHINE_DIR/machine-current"
+}
+
+dm-current-get() {
+  [[ -f "$DOCKER_MACHINE_DIR/machine-current" ]] &&
+    cat "$DOCKER_MACHINE_DIR/machine-current"
+}
+
+dm-restart() {
+  declare machine="$1"
+  [[ -z $machine ]] && machine="$(dm-current-get)"
+  [[ -n $machine ]] || { echo "Set machine name" >&2; return 1; }
+
+  dm-stop  "$machine" &&
+  dm-start "$machine" "${@:2}"
+}
+
+dm-ssh-config() {
+	declare machine="$1"
+	[[ -n $machine ]] || { echo "Set machine name" >&2; return 1; }
+
+	cat <<EOF
+Host $(          docker-machine inspect -f '{{.Driver.MachineName}}' "$machine")
+  HostName     $(docker-machine inspect -f '{{.Driver.IPAddress}}'   "$machine")
+  User         $(docker-machine inspect -f '{{.Driver.SSHUser}}'     "$machine")
+  IdentityFile $(docker-machine inspect -f '{{.Driver.SSHKeyPath}}'  "$machine")
+  StrictHostKeyChecking no
+  LogLevel              ERROR
+  UserKnownHostsFile    /dev/null
+#    ControlPersist yes
+#    ControlMaster auto
+#    ControlPath ~/.ssh/master-%r@%h:%p
+#    ServerAliveInterval 90
+#    ServerAliveCountMax 10
+
+EOF
+}
+
+dm-ssh-config-add() {
+  declare machine="$1"
+	[[ -n $machine ]] || { echo "Set machine name" >&2; return 1; }
+
+    {
+        echo
+        dm-ssh-config "$machine" |
+            if type dos2unix &> /dev/null; then dos2unix; else cat; fi
+    } >> ~/.ssh/config
+
+    echo $'\n'"-- Added to ~/.ssh/config ------"$'\n'
+    tail -n 15 ~/.ssh/config
+}
+
+_docker-list-machine() {
+    COMPREPLY=($( compgen -W "$(dm-list-machine)" -- "${COMP_WORDS[COMP_CWORD]}" ));
+}
+
+complete -F _docker-list-machine \
+    dm-eval dm-ssh-config dm-ssh-config-add \
+    dm-start dm-restart dm-ip dm-stop \
+    dm-host-update dm-host-check
+

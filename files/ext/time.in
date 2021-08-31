@@ -1,0 +1,142 @@
+export DATE_FORMAT='%F %T'
+
+time-str-days() {
+    local time_sec="$1"
+    printf "%02d day %02d hour %02d min" "$((time_sec/(24*60*60)))" "$((time_sec/(60*60)%24))" "$((time_sec/60%60))"
+}
+
+time-str-hours() {
+    local time_sec="$1"
+    printf "%02d:%02d:%02d" "$((time_sec/3600))" "$((time_sec/60%60))" "$((time_sec%60))"
+}
+
+
+time-show() {
+    declare name="$1"
+    declare start="$2"
+
+    declare end=$(date '+%s')
+    declare secs="$((end - start))";
+
+    echo
+    printf "${name} in %02d:%02d:%02d\n" "$((secs/3600))" "$((secs/60%60))" "$((secs%60))"
+}
+
+function tm() {
+    declare -a date_opts
+    declare help verbose
+    declare format="$DATE_FORMAT"
+
+    # -- Arguments --
+    declare flags=":F:tsrRihv" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            F) format="${OPTARG}"          ;;
+            t) format="%F %T"              ;;
+            s) format="%s"                 ;;
+            r) format=""; date_opts+=(-R)  ;;
+            i) format=""; date_opts+=(-Is) ;;
+            h) help=1                      ;;
+            v) verbose=1                   ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    if [[ -n $help ]]; then
+        echo "tm [opts] [moment] - Show time for now or moment"
+        echo
+        echo "tm 1543339524                     # 2018-11-27 20:25:24"
+        echo "tm 2018-11-27T20:25:24+03:00      # 2018-11-27 20:25:24"
+        echo "tm 'Tue Nov 27 20:25:24 MSK 2018' # 2018-11-27 20:25:24"
+        echo "tm '2018-11-27 20:25:24'          # 2018-11-27 20:25:24"
+        echo "tm '11/27/18 20:25:24'            # 2018-11-27 20:25:24"
+        echo
+        echo "tm 1543339524 -t                  # 2018-11-27 20:25:24"
+        echo "tm 1543339524 -i                  # 2018-11-27T20:25:24+03:00"
+        echo "tm 1543339524 -r                  # Tue, 27 Nov 2018 20:25:24 +0300"
+        echo "tm 1543339524 -s                  # 1543339524"
+        echo "tm 1543339524 -F '%D %R'          # 11/27/18 20:25"
+
+        return 0
+    fi
+
+    declare time="${params[0]}"
+
+    [[ -n $format ]] && date_opts+=("+$format" )
+
+    if [[ -n "$time" ]]; then
+        [[ "$time" =~ ^[0-9]+$ ]] && time="@$time"
+
+        [[ "$time" =~ ^[+-][0-9]+$ ]] && {
+            declare now=$(date +%s)
+            time=$((now + time))
+
+            time="@$time"
+        }
+
+        date_opts+=(--date "$time")
+    fi
+
+    [[ -n $verbose ]] && echo "date ${date_opts[@]}" >&2
+    command date "${date_opts[@]}" | tr -d '\n'
+}
+
+function ts() {
+    tm -s "$@"
+}
+
+function tms() {
+    declare job="$1"
+    [[ -z $job ]] && job='job'
+
+    declare prefix=TIMER_START_
+    declare name="${prefix}$(echo "$job" | tr '[:lower:]-' '[:upper:]_')"
+    declare start="$(date '+%s')"
+
+    declare -g "$name=${start}"
+}
+
+function tme() {
+    declare prefix=TIMER_START_
+
+    # -- Arguments --
+    declare flags="AO" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) set | grep -oP "^$prefix\w+" | sed "s:$prefix::" | tr '[:upper:]_' '[:lower:]-' ; return ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare job="${params[0]}"
+
+    [[ -z $job ]] && job='job'
+
+    declare name="${prefix}$(echo "$job" | tr '[:lower:]-' '[:upper:]_')"
+    declare start="${!name}"
+
+    declare end=$(date '+%s')
+    declare secs="$((end - start))";
+
+    printf "%s is done in [%02d:%02d:%02d]\n" "$job" "$((secs/3600))" "$((secs/60%60))" "$((secs%60))"
+}
+
+_complete_tme() {
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -eq 1 ]] ; then
+        COMPREPLY=( $( compgen -W "$(tme -A)" -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+
+complete -F _complete_tme tme

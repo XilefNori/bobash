@@ -1,0 +1,28 @@
+bytes() {
+    numfmt --to=iec-i --suffix=B --padding=7 "$@"
+}
+
+hl()   { lss command "${@}" --help; }
+
+ifs-show() { echo -en "$IFS" | xxd -ps -u; }
+
+func-list() {
+    declare -F | sed 's/declare -f //'
+}
+
+trace-out() {
+    declare pid="$1"
+    strace -ff -e trace=write -e write=1,2 -p $pid
+}
+
+iamwho() {
+    echo "user  ID: $(id -un) (effective) $(id -unr) (real)"
+    echo "group ID: $(id -gn) (effective) $(id -gnr) (real)"
+    echo "groups  : $(id -nG)"
+}
+
+iam() { iamwho "$@"; }
+
+yesno() {
+    if eval "$1"; then echo yes; else echo no; fi
+}

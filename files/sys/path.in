@@ -1,0 +1,119 @@
+export PATH
+
+BIN_GREP="$(which grep)"
+BIN_SED="$(which sed)"
+BIN_AWK="$(which awk)"
+
+_f_grep() { "$BIN_GREP" "$@"; }
+_f_sed()  { "$BIN_SED" "$@"; }
+_f_awk()  { "$BIN_AWK" "$@"; }
+
+path() { echo -e "${PATH//:/\\n}" | _f_sed "s:/\+$::"; }
+
+path-add() {
+	declare add verbose
+
+    # -- Arguments --
+    declare flags="va" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=1 ;;
+			a) add=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+	exec 3>/dev/null
+	[[ -n $verbose ]] && exec 3>&2
+
+	declare filepath
+
+	{
+		for filepath in "${params[@]}"; do
+            filepath="${filepath%/}"
+
+			[[ ! -d $filepath ]] && { echo "Directory not exists [$filepath]"; return 1; }
+
+			if ! path-has "$filepath"; then
+				if [[ -n $add ]]; then
+					PATH="$PATH:$filepath"
+				else
+					PATH="$filepath:$PATH"
+				fi
+			else
+				echo "Already in path [$filepath]"
+			fi
+		done
+	} >&3
+
+	exec 3>&-
+}
+
+path-has() {
+	path | _f_grep "^${1%/}$" -q;
+}
+
+_path() {
+    COMPREPLY=( $( compgen -W "$(path)" -- "${COMP_WORDS[COMP_CWORD]}" ) );
+}
+
+path-rm() {
+	declare verbose
+
+    # -- Arguments --
+    declare flags="v" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+	exec 3>/dev/null
+	[[ -n $verbose ]] && exec 3>&2
+
+	declare filepath
+
+	{
+		for filepath in "${params[@]}"; do
+            filepath="${filepath%/}"
+
+			if ! path-has "$filepath"; then
+				echo "No in path [$filepath]"
+			else
+				PATH="$(path | _f_grep -v "^$filepath$" | _f_awk -v ORS=: '{print}' | _f_sed 's/:*$//')"
+			fi
+		done
+	} >&3
+
+	exec 3>&-
+}
+
+complete -F _path path-rm path-readd
+complete -o filenames path-add path-has
+
+path-readd() {
+	declare verbose
+
+    # -- Arguments --
+    declare flags="v" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+	[[ -n $verbose ]] && exec 3>&2
+
+	path-rm "${params[@]}"
+	path-add "${params[@]}"
+
+	exec 3>&-
+}

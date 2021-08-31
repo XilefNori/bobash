@@ -1,0 +1,135 @@
+# -- Func-shim ---------------------------------------------------------------------
+
+if ! declare -f err > /dev/null; then
+    err() { echo ${LR}${1+"$@"}${NC} >&2; }
+fi
+
+if ! declare -f git-check-no-changes > /dev/null; then
+    git-check-no-changes() {
+        [[ $(git status --porcelain | wc -l) -eq 0 ]] || { err "Has local changes"; return 1; }
+    }
+fi
+
+# ---------------------------------------------------------------------------------------
+
+ sf4() { wrapper-help      sf4 "$@"; }
+_sf4() { _wrapper-complete sf4     ; }
+complete -F _sf4 sf4
+
+ sf4-cfg() {  var-cfg "SF4" "$@"; }
+_sf4-cfg() { _var-cfg "sf4-cfg" ; }
+complete -F _sf4-cfg sf4-cfg
+
+# -- Functions ---------------------------------------------------------------------
+
+sf4-create-web() {
+    sf4-create-from-skeleton symfony/website-skeleton  "$@"
+}
+
+sf4-create-api() {
+    sf4-create-from-skeleton symfony/skeleton "$@"
+}
+
+sf4-create-from-skeleton() {
+(
+    declare type="$1"
+    declare project_name="$2"
+    declare version="$3"
+
+    [[   -n $type           ]] || { echo "Enter project type!"                 ; return 1; }
+
+    [[   -n $project_name   ]] || { echo "Enter project name!"                 ; return 1; }
+    [[ ! -d "$project_name" ]] || { echo "Project dir: [$project_name] exits!" ; return 1; }
+
+    echo composer create-project "$type" "$project_name" $version
+         composer create-project "$type" "$project_name" $version
+
+    cd "$project_name" || { echo "Project dir [$project_name] not exist!" ; return 1; }
+
+    if ! git rev-parse --show-toplevel >& /dev/null; then
+        git init
+    fi
+
+    git add .                  &&
+    git commit -m init-symfony &&
+    sf4-contrib-allow          &&
+
+    {
+        echo
+        echo .cache
+        echo .idea
+    } >> .gitignore            &&
+
+    git commit -m .gitignore -a
+
+)
+}
+
+sf4-contrib-allow() {
+    composer config extra.symfony.allow-contrib true
+
+    git add composer.json
+    git commit -m "+ extra.symfony.allow-contrib"
+}
+
+sf4-start() {
+    composer-add-component -n sensiolabs/security-checker      &&
+    composer-add-component -n symfony/monolog-bundle           &&
+    composer-add-component -n symfony/orm-pack                 &&
+    composer-add-component -n stof/doctrine-extensions-bundle  &&
+    composer-add-component -n doctrine/annotations             &&
+    composer-add-component -n ramsey/uuid ramsey/uuid-doctrine &&
+    composer-add-component -n symfony/validator                &&
+    composer-add-component -n jms/serializer-bundle            &&
+
+    composer-add-component -n --dev phpunit/phpunit         &&
+    composer-add-component -n --dev fzaninotto/faker        &&
+    composer-add-component -n --dev symfony/maker-bundle    &&
+    composer-add-component -n --dev doctrine/doctrine-fixtures-bundle
+}
+
+sf4-require-htaccess() { composer-add-component symfony/apache-pack "$@"; }
+sf4-require-faker() { composer-add-component fzaninotto/faker "$@"; }
+
+sf4-require-main() {
+    composer-add-component symfony/monolog-bundle           &&
+    composer-add-component symfony/orm-pack                 &&
+    composer-add-component stof/doctrine-extensions-bundle  &&
+    composer-add-component sensiolabs/security-checker      &&
+    composer-add-component doctrine/annotations             &&
+
+    composer-add-component --dev symfony/maker-bundle        &&
+    composer-add-component --dev doctrine/doctrine-fixtures-bundle
+}
+
+sf4-require-knp-filters() {
+    composer-add-component knplabs/knp-markdown-bundle
+	composer-add-component knplabs/knp-time-bundle
+}
+
+sf4-require-server-bundle() {
+    composer-add-component web-server-bundle
+}
+
+sf4-require-apache() {
+    composer-add-component symfony/apache-pack --dev
+
+    # git-check-no-changes && {
+    #     composer config extra.symfony.allow-contrib true &&
+    # composer require symfony/apache-pack --dev --no-interaction &&
+    #     composer config extra.symfony.allow-contrib false &&
+    #     git add . && git commit -m "+ add apache-pack"
+    # }
+}
+
+sf4-require-slack() {
+    composer-add-component nexylan/slack-bundle php-http/guzzle6-adapter
+}
+
+sf4-require-web() {
+    composer-add-component symfony/twig-bundle          &&
+    composer-add-component symfony/asset                &&
+
+    composer-add-component symfony/profiler-pack --dev  &&
+    composer-add-component symfony/debug-pack --dev
+}

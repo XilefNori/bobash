@@ -1,0 +1,32 @@
+# iconv() { command iconv --unicode-subst="<U+%04X>" --byte-subst="<0x%02x>" --widechar-subst="<%08x>" "$@"; }
+
+utf-insert-bom() { sed -b -e '1s/^/\xff\xfe/' "$@"; }
+utf-remove-bom() { sed -b -e '1s/^\xef\xbb\xbf//' "$@"; }
+
+askoi() { "$@" 2>&1 | iconv -f KOI8-R -t UTF-8; }
+asdos() { "$@" 2>&1 | iconv -f CP866  -t UTF-8; }
+aswin() { "$@" 2>&1 | iconv -f CP1251 -t UTF-8; }
+
+utf2win() { iconv -f UTF-8  -t CP1251 "$@"; }
+utf2dos() { iconv -f UTF-8  -t CP866 "$@"; }
+utf2koi() { iconv -f UTF-8  -t KOI8-R "$@"; }
+win2utf() { iconv -f CP1251 -t UTF-8  "$@"; }
+dos2utf() { iconv -f CP866  -t UTF-8 "$@"; }
+koi2utf() { iconv -f KOI8-R -t UTF-8  "$@"; }
+
+utf2unicode() { iconv -f UTF-8 -t UTF-16LE "$@"; }
+unicode2utf() { iconv -f UTF-16LE -t UTF-8 "$@"; }
+
+win2dos() { iconv -f CP1251 -t CP866  "$@"; }
+dos2win() { iconv -f CP866  -t CP1251 "$@"; }
+
+utf2unicode-bom() { utf2unicode "$@" | utf-insert-bom; }
+
+utf-remove-bom-files() {
+    for file in "$@"; do
+    	echo -n "Removing BOM [$file] ... "
+        utf-remove-bom -i "$file"
+        echo 'DONE'
+    done;
+}
+

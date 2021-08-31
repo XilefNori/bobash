@@ -1,0 +1,6 @@
+# vagrant() {
+#     (
+#         path-rm /bin /usr/bin /usr/local/bin
+#         command vagrant "$@"
+#     )
+# }

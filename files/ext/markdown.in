@@ -1,0 +1,25 @@
+export MARKDOWN_FORMAT="markdown_github"
+
+markdown2man() {
+    declare fname="$1"
+    declare title="$(basename "$fname" .md)"
+
+    cat "$1"                                                    |
+    sed 's: _: :g; s:_ : :g; s:```:=+=:g; s:`:_:g; s:=+=:```:g' |
+    sed '1 { s:<!-- # ::; s:-->::; }'                           |
+    pandoc -s -f $MARKDOWN_FORMAT -t man                        |
+    sed '/^.TH/s:^.*:.TH "'"$title"'" "1" "" "" "":'            |
+    preconv                                                     |
+    nroff -Tutf8 -mandoc -c
+}
+
+
+markdown-show() {
+	pandoc -s -f $MARKDOWN_FORMAT -t man "$1" | preconv -e UTF8 | groff -T utf8 -man | less
+}
+
+complete -f -X '!*.md' markdown-show
+
+markdown-readme() {
+	md-show "$(find -maxdepth 1 -iname 'readme*')"
+}

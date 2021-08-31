@@ -1,0 +1,426 @@
+-- Application configuration --------------------------------------------------------
+
+config/packages/*.{php,xml,yaml,yml}
+config/packages/<env>/*.{php,xml,yaml,yml}
+
+config/services.{php,xml,yaml,yml}
+config/services_<env>.{php,xml,yaml,yml}
+
+-- Instalation --
+
+composer require <bundle-name>
+
+sf config:dump              # bundle list with alias in config files (packages/*.yml)
+sf config:dump  BundleName  # default bundle setting
+sf debug:config BundleName  # actual bundle setting
+
+-- Creating bundles ------------------------------------------------------------------
+
+-- Classes --
+
+- \Acme\BlogBundle\AcmeBlogBundle
+- \Acme\BlogBundle\DependencyInjection\AcmeBlogExtension
+- \Acme\BlogBundle\DependencyInjection\Configuration
+
+-- Turn on --
+
+// config/bundles.php
+
+return [
+    // 'all' means that the bundle is enabled for any Symfony environment
+    Symfony\Bundle\FrameworkBundle\FrameworkBundle::class => ['all' => true],
+    // this bundle is enabled only in 'dev'  and 'test', so you can't use it in 'prod'
+    Symfony\Bundle\WebProfilerBundle\WebProfilerBundle::class => ['dev' => true, 'test' => true],
+];
+
+-- Main class --
+
+Naming: <Vendor>(<Category>?)<Service>Bundle
+
+| Namespace              | Bundle Class Name | DI alias  |
+|------------------------|-------------------|-----------|
+| Acme\Bundle\BlogBundle | AcmeBlogBundle    | acme_blog |
+| Acme\BlogBundle        | AcmeBlogBundle    | acme_blog |
+
+
+// src/Acme/TestBundle/AcmeTestBundle.php
+
+namespace App\Acme\TestBundle;
+use Symfony\Component\HttpKernel\Bundle\Bundle;
+
+class AcmeTestBundle extends Bundle {}
+
+
+-- Directories --------------------------------------------------------------------------------
+
+
+Controller/          Contains the controllers of the bundle (e.g. RandomController.php).
+
+DependencyInjection/ Holds certain Dependency Injection Extension classes, which may
+                     import service configuration, register compiler passes or more
+                     (this directory is not necessary).
+
+Resources/config/    Houses configuration, including routing configuration (e.g. routing.yaml).
+Resources/views/     Holds templates organized by controller name (e.g. Random/index.html.twig).
+Resources/public/    Contains web assets (images, stylesheets, etc) and is copied or symbolically linked into the project public/ directory via the assets:install console command.
+Tests/               Holds all tests for the bundle.
+
+
+-- Loading bundle service configuration -------------------------------------------------------
+
+
+In order to load service configuration, you have to create a Dependency Injection (DI) Extension for your bundle.
+
+Naming: <Vendor>(<Category>?)<Service>Extension
+
+// For overnaming:
+AcmeBlogBundle::getContainerExtension() { return new UnconventionalNameExtensionClass(); }
+AcmeBlogExtension::getAlias()           { return 'blog'; } // not 'acme_blog' DI alias
+
+class AcmeBlogExtension extends Extension /* implemens ExtensionInterface */
+{
+    // !!! CAUTION !!!
+    //
+    // This method does NOT get the ACTUAL CONTAINER instance, but a COPY.
+    // This container ONLY has the PARAMETERS from the actual container.
+    //
+    // AFTER calling Extension::load, the COPY will be MERGED into the ACTUAL CONTAINER,
+    // to ensure all services and parameters are also added to the actual container.
+    //
+
+    public function load(array $configs, ContainerBuilder $container)
+    {
+        // Loading service configuration
+        $loader = new YamlFileLoader($container, new FileLocator(__DIR__.'/../Resources/config'));
+        $loader->load('services.yaml');
+
+        // Loading '\Acme\BlogBundle\DependencyInjection\Configuration' (calculated inside)
+        $configuration = $this->getConfiguration($configs, $container);
+
+        // Getting current confuration from 'acme_blog' DI alias from 'config/packages/acme_blog.yaml'
+        $config        = $this->processConfiguration($configuration, $configs);
+
+        // Turn on advanced service configuration on config option
+        if ($config['advanced']) {
+            $loader->load('advanced.yaml');
+        }
+
+        // Making container parameters from configuration settings
+        foreach ($config as $k => $v) {
+            $container->setParameter(self::ALIAS . ".$k", $v);
+        }
+
+        // Service defintion manipulation for creation or tuning CURRENT bundle services config
+        // Look more in "Service Definition" section
+        // For integration/interaction with other bundles/application use CompilerPasses
+
+        $definition = $container->findDefinition('app.user_config_manager');
+        $definition->setArgument('$argumentName', $argumentValue);
+
+
+        // If classes contain Annotaions you can add them to compiler so they are compiled when
+        // generating the application cache to improve the overall performance.
+        $this->addAnnotatedClassesToCompile([
+            // you can define the fully qualified class names...
+            'App\\Controller\\DefaultController',
+            // ... but glob patterns are also supported:
+            '**Bundle\\Controller\\',
+
+            // ...
+        ]);
+    }
+
+
+}
+
+-- Service Definition -----------------------------------------------------------------------------
+
+Service Definition is base method for declaring services. All other methods (yaml,xml,php) just use
+Service Definition to do the job.
+
+Service definitions are the instructions describing how the container should build a service.
+They are not the actual services used by your applications. The container will create the actual
+class instances based on the configuration in the definition.
+
+Classes:
+
+Symfony\Component\DependencyInjection\Definition - Service definition
+Symfony\Component\DependencyInjection\Reference  - Reference to another service (in arguments)
+
+-- Definition description --
+
+Definition (settings) the same as in services.[yaml|xml|php] files:
+    - class            - service class
+    - arguments        - $named or FQCN arguments of: constructor
+    - bindings         - $named or FQCN arguments of: constructor, @required methods, controller actions
+    - tags             - service tags with attributes
+    - autoconfigured   - auto tag set by implementing interfaces
+    - autowired        - arguments are set automatically by type-hint/$name binding
+    - public           - service can be get at runtime $container-get()
+    - private          - container can be optimied removing not used services (opposite to public)
+
+    - calls            - explicit method call with arguments
+    - properties       - set service properties
+
+    - decoratedService - service decorates another service and is used instead of decorated one
+    - factory          - service is created by calling factory method (static or non-static of another service)
+    - configurator     - callable service config: $configurator->_invoke($service)
+    - file             - some startup file (if needed) to include before creating service object
+    - abstract         - service is abstract (and probably parent)
+    - shared           - on false service is created every time it is call (instead of: one for all)
+
+    - instanceof       - set tags
+    - synthetic        - service is made and set at run-time (to suppress "service not exist" error)
+    - lazy             - service class is wrapped and inited only it is really used (method call)
+
+// class AcmeBlogExtension extends Extension
+
+public function load(array $configs, ContainerBuilder $container)
+{
+    // finds out if there is an "app.mailer" definition
+    $container->hasDefinition('app.mailer');
+
+    // finds out if there is an "app.mailer" definition or alias
+    $container->has('app.mailer');
+
+    // gets the "app.user_config_manager" definition
+    $definition = $container->getDefinition('app.user_config_manager');
+
+    // gets the definition with the "app.user_config_manager" ID or alias
+    $definition = $container->findDefinition('app.user_config_manager');
+
+    // adds a new "app.number_generator" definition
+    $definition = new Definition(\App\NumberGenerator::class);
+    $container->setDefinition('app.number_generator', $definition);
+
+    // shortcut for the previous method
+    $container->register('app.number_generator', \App\NumberGenerator::class);
+
+    // -- Arguments ------------------------------------------------------------------
+
+    // Adding arguments to service __constructor
+    $definition = new Definition(DoctrineConfigManager::class, [
+        new Reference('doctrine'),  // a reference to another service
+        '%app.config_table_name%',  // will be resolved to the value of a container parameter
+    ]);
+
+    // gets all arguments configured for this definition
+    $constructorArguments = $definition->getArguments();
+
+    // gets a specific argument
+    $firstArgument = $definition->getArgument(0);
+
+    // adds a new argument with the name of the argument
+    // $argumentName = the name of the argument in the constructor
+    $argument = $definition->setArgument('$argumentName', $argumentValue);
+
+    // adds a new argument
+    $definition->addArgument($argument);
+
+    // replaces argument on a specific index (0 = first argument)
+    $definition->replaceArgument($index, $argument);
+
+    // replaces all previously configured arguments with the passed array
+    $definition->setArguments($arguments);
+
+    // -- Method Calls ------------------------------------------------------------
+
+    // gets all configured method calls
+    $methodCalls = $definition->getMethodCalls();
+
+    // configures a new method call
+    $definition->addMethodCall('setLogger', [new Reference('logger')]);
+
+    // configures an immutable-setter
+    $definition->addMethodCall('withLogger', [new Reference('logger')], true);
+
+    // replaces all previously configured method calls with the passed array
+    $definition->setMethodCalls($methodCalls);
+
+    // -- Include file before service creation -----------------------------------
+
+    $definition->setFile('/src/path/to/file/foo.php');
+
+}
+
+
+-- Compiler passes -----------------------------------------------------------------------
+
+Compiler passes give you an opportunity to manipulate other service definitions that have
+been registered with the service container.
+
+Compiler passes are called after all extensions are loaded, it allows you to edit service
+definitions of other extensions as well as retrieving information about service definitions.
+
+There are two methods of creating complier passes (in App\Kernel or Bundle):
+1. Kernel/Bundle registers separate CompilerPass implementing CompilerPassInterface::process
+1. Kernel/Extension class implementing CompilerPassInterface::process by themselves
+
+NOTE: Extension/Kernel::process() is called during the PassConfig::TYPE_BEFORE_OPTIMIZATION step
+
+The default compiler passes are grouped into:
+    - optimization - run first and include tasks such as resolving references within the definitions.
+    - removal      - perform tasks such as removing private aliases and unused services.
+
+All phases are:
+
+PassConfig::TYPE_BEFORE_OPTIMIZATION
+PassConfig::TYPE_OPTIMIZE
+PassConfig::TYPE_BEFORE_REMOVING
+PassConfig::TYPE_REMOVE
+PassConfig::TYPE_AFTER_REMOVING
+
+Inside each phase the order in which compiler passes are run can be controlled by `priority` option.
+
+-- Registering CompilerPass --
+
+// class Kernel extends BaseKernel // In App Kernel
+protected function build(ContainerBuilder $container): void
+{
+    $container->addCompilerPass(new CustomPass());
+}
+
+// class TraceBundle extends Bundle // In Bundle
+public function build(ContainerBuilder $container)
+{
+    $container->addCompilerPass(
+        new TurnOffDefaultMonologPass(),
+        $type = PassConfig::TYPE_BEFORE_OPTIMIZATION,
+        $priority = 128
+    );
+}
+
+
+-- Running CompilerPass --
+
+class CustomPass implements CompilerPassInterface
+{
+    // One of the most common use-cases of compiler passes is to work with tagged services
+    foreach ($container->findTaggedServiceIds('some_tag') as $id => $tags) {
+        // ...
+    }
+
+    // Or changing so,e container service options:
+    $container->getDefinition('app.some_private_service')->setPublic(true);
+
+    // Or removing tags to suppress some tag-driven configuration
+    // This service will not be registered and run as MonologProcesor
+    $definition->clearTag('monolog.processor');
+}
+
+
+-- Configuration ---------------------------------------------------------------------------
+
+-- TreeBuilder ----------------------------------------------
+
+A TreeBuilder instance should be returned from a custom Configuration class which implements
+the ConfigurationInterface:
+
+class Configuration implements ConfigurationInterface
+{
+    public function getConfigTreeBuilder()
+    {
+        $treeBuilder = new TreeBuilder('database');
+
+        // ... add node definitions to the root of the tree
+        // $treeBuilder->getRootNode()->...
+
+        return $treeBuilder;
+    }
+}
+
+-- Node Type --
+
+- scalar (generic type for: boolean, string, integer, float, null)
+- boolean
+- integer
+- float
+- enum (similar to scalar, but it only allows a finite set of values)
+- array
+- variable (no validation)
+
+$rootNode is Array Node
+
+$rootNode
+    ->children()
+        ->xxxxNode($name)
+            ->settingsCalls()...
+        ->end()
+    ->end()
+;
+
+-- Enum Nodes --
+
+$rootNode
+    ->children()
+        ->enumNode('delivery')
+            ->values(['standard', 'expedited', 'priority'])
+        ->end()
+    ->end()
+;
+
+-- Numeric Nodes --
+
+- min()
+- max()
+
+$rootNode
+    ->children()
+        ->integerNode('value_inside_a_range')
+            ->min(-50)->max(50)
+        ->end()
+    ->end()
+;
+
+-- Array Nodes --
+
+- useAttributeAsKey()         - Provide the name of a child node, whose value should be used as the key in the resulting array. This method also defines the way config array keys are treated, as explained in the following example.
+- requiresAtLeastOneElement() - There should be at least one element in the array (works only when isRequired() is also called).
+- addDefaultsIfNotSet()       - If any child nodes have default values, use them if explicit values haven't been provided.
+- normalizeKeys(false)        - If called (with false), keys with dashes are not normalized to underscores. It is recommended to use this with prototype nodes where the user will define a key-value map, to avoid an unnecessary transformation.
+- ignoreExtraKeys()           - Allows extra config keys to be specified under an array without throwing an exception.
+
+
+-- Configuration of Multiple Bundles -----------------------------
+
+Bundle can set predefined configuration settings to other bundles, which will be overloaded
+by config files if set there. To do this Extension must implement `PrependExtensionInterface`.
+
+class AcmeHelloExtension extends Extension implements PrependExtensionInterface
+{
+    // note that if the user manually configured use_acme_goodbye to true in config/services.yaml
+    // then the setting would in the end be true and not false
+
+    public function prepend(ContainerBuilder $container)
+    {
+        $bundles = $container->getParameter('kernel.bundles');
+
+        // determine if AcmeGoodbyeBundle is registered
+        if (!isset($bundles['AcmeGoodbyeBundle'])) {
+            $config = ['use_acme_goodbye' => false];
+
+            foreach ($container->getExtensions() as $name => $extension) {
+                switch ($name) {
+                    case 'acme_something':
+                    case 'acme_other':
+                        // set use_acme_goodbye to false in acme_something and acme_other
+                        $container->prependExtensionConfig($name, $config);
+                        break;
+                }
+            }
+        }
+
+        // Get merged configuration of "acme_hello"
+        $configs = $container->getExtensionConfig($this->getAlias());
+        $config = $this->processConfiguration(new Configuration(), $configs);
+
+        // Prepend the "acme_something" setting if it is set in "acme_hello"
+        if (isset($config['entity_manager_name'])) {
+            $container->prependExtensionConfig('acme_something', [
+                'entity_manager_name' => $config['entity_manager_name']
+            ]);
+        }
+
+    }
+}
+

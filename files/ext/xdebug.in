@@ -1,0 +1,149 @@
+export PHP_IDE_CONFIG XDEBUG_CONFIG
+
+export XDEBUG_REMOTE_CONFIG
+
+XDEBUG_CONFIG_ORG="$XDEBUG_CONFIG"
+
+XDEBUG_COLOR_ON=$LG
+XDEBUG_COLOR_OFF_BUILD=$DY
+XDEBUG_COLOR_OFF=$DY
+XDEBUG_COLOR_HOT=$LB
+XDEBUG_COLOR_COLD=$DY
+XDEBUG_COLOR_ENABLED=$LW
+XDEBUG_COLOR_DISABLED=$DY
+
+# -----------------------------------------------------------------------------------
+
+ xdebug-cfg() {  var-cfg "XDEBUG" "$@"; }
+_xdebug-cfg() { _var-cfg "xdebug-cfg" ; }
+complete -F _xdebug-cfg xdebug-cfg
+
+ xdebug-.complete() {  wrapper-complete-cmd  xdebug "$@" ; }
+_xdebug-.complete() { _wrapper-complete-cmd  xdebug      ; }
+complete -F _xdebug-complete xdebug-complete
+
+ xdebug() { wrapper-help  xdebug "$@"; }
+_xdebug() { _wrapper-complete  xdebug     ; }
+complete -F _xdebug xdebug
+
+# -----------------------------------------------------------------------------------
+
+xdebug-off() {
+    [[ -n "$XDEBUG_CONFIG" ]] && {
+        XDEBUG_CONFIG_SAVED="$XDEBUG_CONFIG"
+        XDEBUG_CONFIG=''
+    }
+
+    xdebug-env "$@"
+}
+
+xdebug-on() {
+    [[ -n "$XDEBUG_CONFIG_SAVED" ]] && XDEBUG_CONFIG="$XDEBUG_CONFIG_SAVED"
+
+    xdebug-env "$@"
+}
+
+xdebug-env() {
+    declare verbose info build
+    # -- Arguments --
+    declare flags="OAvib" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+              O) _complete-cmd-options "$flags"; return ;;
+              A) return ;;
+              v) verbose=1 ;;
+              i) info=1 ;;
+              b) build=1;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    if [[ -n $info || -n $build ]]; then
+        info='xdebug'
+        [[ -n $build ]] && info="${info}-build"
+        info="${info}: "
+
+        declare xdebug_enabled="$(xdebug-php | grep -P 'support.*enabled')"
+
+        if [[ -n $xdebug_enabled    ]]; then
+            [[ -n $XDEBUG_CONFIG     ]] && info="${info} ${XDEBUG_COLOR_ON}on${NC}"   || info="${info} ${XDEBUG_COLOR_OFF}off${NC}"
+            [[ -n $XDEBUG_CONFIG_ORG ]] && info="${info} ${XDEBUG_COLOR_HOT}hot${NC}" || info="${info} ${XDEBUG_COLOR_COLD}cold${NC}"
+        else
+            if [[ -n $build ]]; then
+
+                [[ -n $XDEBUG_CONFIG ]] && info="${info} ${XDEBUG_COLOR_ON}on${NC}" || info="${info} ${XDEBUG_COLOR_OFF_BUILD}off${NC}"
+            else
+                info="${info} ${XDEBUG_COLOR_DISABLED}disabled${NC}"
+            fi
+        fi
+
+        echo $info
+        return
+    fi
+
+    echo "PHP_IDE_CONFIG='$PHP_IDE_CONFIG'"
+    echo "XDEBUG_CONFIG='$XDEBUG_CONFIG'"
+
+    if [[ -n $verbose ]]; then
+        echo "XDEBUG_CONFIG_SAVED='$XDEBUG_CONFIG_SAVED'"
+        echo "XDEBUG_CONFIG_ORG='$XDEBUG_CONFIG_ORG'"
+    fi
+}
+
+xdebug-php() {
+    if ! which php > /dev/null; then echo "No php installed" >&2; return 1; fi
+
+    php -i | grep xdebug | less
+}
+
+XDEBUG_STATUS_GREP=(support default_enable extended_info idekey profiler_enable\b)
+
+XDEBUG_STATUS_GREP+=(remote_autostart)
+XDEBUG_STATUS_GREP+=(remote_connect_back)
+XDEBUG_STATUS_GREP+=(remote_enable)
+XDEBUG_STATUS_GREP+=(remote_host)
+XDEBUG_STATUS_GREP+=(remote_log)
+XDEBUG_STATUS_GREP+=(remote_mode)
+XDEBUG_STATUS_GREP+=(remote_port)
+XDEBUG_STATUS_GREP+=(remote_timeout)
+
+xdebug-status() {
+    echo "-- PHP --------------------------------"
+    which php
+    php -v
+    echo ''
+    echo "-- Enviroment -------------------------"
+    xdebug-env
+    echo ''
+    echo "-- Xdebug extension -------------------"
+
+    declare separator="|"
+    declare regex="${XDEBUG_STATUS_GREP[@]/#/$separator}"
+    regex="${regex:${#separator}}" # remove leading separator
+
+    xdebug-php | grep --color=no -P "($regex)"
+}
+
+# ----------------------------------------------------------------------------------
+
+xdebug-.list-cmd() {
+    declare prefix='xdebug-'
+
+    declare full
+    # -- Arguments --
+    declare flags="fOA" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            f) full=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare -F | sed 's/declare -f //' | grep -P "^$prefix" | sed -e "s~$prefix~~"
+}

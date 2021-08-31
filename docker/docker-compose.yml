@@ -1,0 +1,19 @@
+version: "3.7"
+services:
+  bobash:
+    container_name: bobash
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.php
+      args:
+        - DEVELOPER_UID
+        - DEVELOPER_GID
+    image: bobash:latest
+    volumes:
+      - bobash-rc:/bobash/home
+      - "./dist:/bobash/dist"
+      - "$HOME/.ssh:/bobash/.ssh"
+
+volumes:
+  bobash-rc:
+    external: true

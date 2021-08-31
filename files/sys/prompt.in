@@ -1,0 +1,16 @@
+prompt-command-add() {
+	declare funcname="$1"
+	! grep -q "$funcname" <(echo "$PROMPT_COMMAND") && {
+		export PROMPT_COMMAND="$funcname; $PROMPT_COMMAND"
+	}
+}
+
+prompt() {
+	printf "PS1=%q\n" "$PS1"
+	printf "PS2=%s\n" "$PS2"
+	printf "PS3=%s\n" "$PS3"
+	printf "PS4=%s\n" "$PS4"
+	echo
+	echo "PROMPT_COMMAND=$PROMPT_COMMAND"
+}
+

@@ -1,0 +1,11 @@
+SRC="${BASH_SOURCE[0]/$HOME\/}"
+
+[[ ! -f "$SSH_BIN_DIR/ssh-agent" ]] && { echo "[$SRC:$LINENO] File: $SSH_BIN_DIR/ssh-agent no exist" >&2; unset SRC; return 1; }
+[[ ! -d "$SSH_DIR"               ]] && { echo "[$SRC:$LINENO] Dir: $SSH_DIR no exist"    >&2; unset SRC; return 1; }
+[[ ! -d "$SSH_KEY_DIR"           ]] && { echo "[$SRC:$LINENO] Dir: $SSH_KEY_DIR no exist"    >&2; unset SRC; return 1; }
+
+# Source SSH settings, if applicable
+
+ssh-agent-exist || ssh-agent-start
+
+ssh-agent-show

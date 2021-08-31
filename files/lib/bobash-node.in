@@ -1,0 +1,56 @@
+_complete-bobash-node() {
+    declare cur="${COMP_WORDS[COMP_CWORD]}";
+    declare IFS=$'\n'
+
+    declare aliases=($(bobash-node -l))
+
+    COMPREPLY=($( compgen -W "${aliases[*]}" -- "$cur" ));
+
+    return 0
+}
+
+bobash-nodes() { bobash-node -l; }
+
+bobash-node()
+{
+    declare fa_nodes="$BOBASH_DIR_DEPLOY/nodes"
+    # echo "fa_nodes="$BOBASH_NODES_FILE""
+
+    declare name list field strict
+
+    # -- Arguments --
+    declare flags="slf:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            s) strict=1 ;;
+            l) list=1 ;;
+            f) field="${OPTARG}" ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    name="${params[0]}"
+    [[ -n $list ]] && field=1
+    [[ -z $field ]] && field=0
+
+    [[ -z $strict ]] && {
+        name=${name##*@}
+        name=${name%:*}
+    }
+
+
+    # script='!/^\s*($|#)/ { gsub(/ /, "", $0); print $1 }'
+    # script='!/^\s*($|#)/ && $1 ~ NAME { gsub(/ /, "", $0); if($1 ~ NAME) { print $'$field' } }'
+
+    script='!/^\s*($|#)/ { gsub(/[ \t]+/, "", $0); if (!NAME || $1 == NAME) { print $'$field'} }'
+
+    declare system="$(distro-system)"
+    {
+        echo "local:fs:$system:localhost.$system:$HOME"
+        cat "$fa_nodes"
+    } | awk -F: -v NAME="$name" "$script"
+}
+
+complete -o nospace -F _complete-bobash-node bobash-node

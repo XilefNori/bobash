@@ -1,0 +1,15 @@
+locale-cur() {
+    locale;
+} 
+
+locale-all() {
+    locale -a;
+} 
+
+locale-default() {
+    files=(/etc/default/locale /etc/locale.gen /etc/environment)
+    
+    for i in "${files[@]}"; do
+        [[ -f $i ]] && { echo -e "\n -- $i ---------\n"; cat $i; }
+    done | less
+} 

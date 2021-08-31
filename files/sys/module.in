@@ -1,0 +1,100 @@
+bobash-rc() {
+    declare verbose
+
+    # -- Arguments --
+    declare flags="v" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            v) verbose=1 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    [[ -n $verbose ]] && declare BOBASH_LOAD_VERBOSE=1
+
+    source "$HOME/.bashrc"
+}
+
+
+bobash-module() { bb_module "$@"; }
+bobash-load() { bb_module "$@"; }
+
+bb_module() {
+    declare edit show quite=0
+
+    # -- Arguments --
+    declare flags="Oqesl" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        getopts "$flags" flag && { case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            q) quite=$((quite+1))                     ;;
+            e) edit=1                                 ;;
+          l|s) show=1                                 ;;
+        esac; } || {
+            params+=("${!OPTIND}"); ((OPTIND++))
+        }
+    done
+
+    if [[ ${#params[@]} == 0 ]]; then
+        find -L "$BOBASH_DIR/" -name '*.in' -printf '%f\n' | sed 's:\.in::' | sort
+        return
+    fi
+
+    # shopt -q expand_aliases
+    # declare expand_aliases_on=$?
+    # [[ $expand_aliases_on -eq 0 ]] && shopt -u expand_aliases
+
+    for module in "${params[@]}"; do
+        declare files=($(find -L "$BOBASH_DIR/" -type f -name "$module.in"))
+
+        if [[ ${#files[@]} -eq 0 ]]; then
+            echo "Module [$module] not found!" >&2;
+
+            return 1
+        fi
+
+        declare file
+        for file in "${files[@]}"; do
+            if [[ -n $show ]]; then
+                less "$file"
+            elif [[ -n $edit ]]; then
+                vim -s sh "$file"
+            else
+                [[ $quite -eq 0 ]] && echo "Sourcing [$file]"
+                source "$file"
+            fi
+        done
+    done
+
+    # [[ $expand_aliases_on -eq 0 ]] && shopt -s expand_aliases
+}
+
+_complete_bb_module() { COMPREPLY=($( compgen -W "$(bb_module)" -- "${COMP_WORDS[COMP_CWORD]}" )); }
+
+complete -F _complete_bb_module bb_module bobash-module bobash-load
+
+export -f bb_module
+
+#
+# declare -A SHOPT_SWITCH
+#
+# function shopt_switch() {
+#     declare opt="$1"
+#     declare act="$2"
+#
+#     if [[ $act == 'off' ]]; then
+#         shopt -q $opt
+#         SHOPT_SWITCH[$opt]=$?
+#
+#         [[ ${SHOPT_SWITCH[$opt]} -eq 0 ]] && shopt -u $opt
+#     else
+#         [[ ${SHOPT_SWITCH[$opt]} -eq 0 ]] && shopt -s $opt
+#
+#         unset SHOPT_SWITCH[$opt]
+#     fi
+# }
+# export -f shopt_switch
+#

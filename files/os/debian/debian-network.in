@@ -1,0 +1,4 @@
+port-stat ()
+{
+    sudo netstat -l -tu -n -p
+}

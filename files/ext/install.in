@@ -1,0 +1,27 @@
+ inst() { wrapper-help        inst "$@" ; }
+_inst() { _wrapper-complete   inst      ; }
+complete -F _inst inst
+
+ inst-cfg() {  var-cfg "INST" "$@" ; }
+_inst-cfg() { _var-cfg "inst-cfg"  ; }
+complete -F _inst-cfg inst-cfg
+
+inst-.list-cmd() {
+    declare prefix='inst-'
+
+    declare full
+    # -- Arguments --
+    declare flags="fOA" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+            O) _complete-cmd-options "$flags"; return ;;
+            A) return ;;
+            f) full=1 ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare -F | sed 's/declare -f //' | grep -P "^$prefix" | sed -e "s~$prefix~~"
+}

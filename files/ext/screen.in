@@ -1,0 +1,179 @@
+# _screen() {
+#     perl -e '@w=split(/ /,\$ENV{COMP_LINE},-1);\$w=pop(@w);for(qx(screen -ls)){print qq/\$1\n/ if (/^\s*\$w/&&/(\d+\.\w+)/||/\d+\.(\$w\w*)/)}'
+# }
+
+_screen_sessions()
+{
+    declare cur="${COMP_WORDS[COMP_CWORD]}"
+    declare prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    declare sessions=( $( command screen -ls | sed -ne \
+        's|^\t\{1,\}\([0-9]\{1,\}\.[^\t]\{1,\}\).*'"$1"'.*$|\1|p' ) )
+    if [[ $cur == +([0-9])?(.*) ]]; then
+        # Complete sessions including pid prefixes
+        COMPREPLY=( $( compgen -W '${sessions[@]}' -- "$cur" ) )
+    else
+        # Create unique completions, dropping pids where possible
+        declare -A res
+        declare i tmp
+        for i in ${sessions[@]}; do
+            res[${i/#+([0-9])./}]+=" $i"
+        done
+        for i in ${!res[@]}; do
+            [[ ${res[$i]} == \ *\ * ]] && tmp+=" ${res[$i]}" || tmp+=" $i"
+        done
+        COMPREPLY=( $( compgen -W '$tmp' -- "$cur" ) )
+    fi
+}
+
+_screen()
+{
+    declare cur prev words cword
+    _init_completion || return
+
+    if ((cword > 2)); then
+        case ${words[cword-2]} in
+            -[dD])
+                _screen_sessions
+                return 0
+                ;;
+        esac
+    fi
+
+    declare i
+    for (( i=1; i <= cword; i++ )); do
+        case ${words[i]} in
+            -r|-R|-d|-D|-x|-s|-c|-T|-e|-h|-p|-S|-t)
+                (( i++ ))
+                continue
+                ;;
+            -*)
+                continue
+                ;;
+        esac
+
+        _command_offset $i
+        return
+    done
+
+    case $prev in
+        -[rR])
+            # list detached
+            _screen_sessions 'Detached'
+            return 0
+            ;;
+        -[dD])
+            # list attached
+            _screen_sessions 'Attached'
+            return 0
+            ;;
+        -x)
+            # list both
+            _screen_sessions
+            return 0
+            ;;
+        -s)
+            _shells
+            return 0
+            ;;
+        -c)
+            _screen_config_files
+            # _filedir
+            return 0
+            ;;
+        -T)
+            _terms
+            return 0
+            ;;
+        -S)
+            _screen_sessions
+            return 0
+            ;;
+        -e|-h|-p|-t)
+            return 0
+            ;;
+    esac
+
+    if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $( compgen -W '-a -A -c -d -D -e -f -fn -fa -h -i -ln -list
+            -L -m -O -p -q -r -R -s -S -t -T -U -v -wipe -x -X --help
+            --version' -- "$cur" ) )
+    fi
+}
+
+_screen_config_files() {
+    files="$(find "$HOME/.screen/" -type f -name '*.screenrc')"
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    COMPREPLY=()
+
+    if [[ ${COMP_CWORD} -gt 0 ]] ; then
+        COMPREPLY=( $( compgen -W "${files}" -- "$cur" ) )
+        return 0
+    fi
+
+    return 0
+}
+
+screen_start() {
+    start_type="$1"
+    [ -z "$start_type" ] && start_type='run'
+
+    if [[ -z "$STY" ]]; then
+        if [[ $start_type == 'run' ]]; then
+            screen -ARR
+        elif [[ $start_type == 'exec' ]]; then
+            exec screen -ARR
+        fi
+    fi
+}
+
+complete -F _screen screen
+
+function scr() {
+    declare fr_config="$1"
+
+    declare da_scripts="$HOME/.screen"
+
+    if [[ -z ${fr_config} ]]; then
+        find "$da_scripts/" -type f -name "*.screenrc"  | sed -e "s~$da_scripts/~~" -e 's~.screenrc~~' | sort
+    else
+        fa_script="$(find "$da_scripts/" -ipath "*$fr_config*")"
+
+        echo "Config: $fa_script"
+
+        screen -c "$fa_script"
+    fi
+}
+
+complete -F _complete-cmd scr
+
+
+_screen_sessions_cmd() {
+    _screen_sessions 'Detached'
+}
+
+# run command inside screen window
+scr-run-command() {
+
+    declare session cmd window
+    declare -a scr_opt
+
+    session="$1"
+    cmd="$2"
+    window="$3"
+
+    [[ -n $session ]] && scr_opt+=(-S "$session")
+    [[ -n $cmd     ]] && scr_opt+=(-X stuff "$cmd"$'\n')
+    [[ -n $window  ]] && scr_opt+=(-p "$window" )
+
+    # screen -S "$session" -p "$window" -X stuff "$cmd"$'\n'
+    command screen "${scr_opt[@]}"
+}
+
+scr-rename() {
+    command screen -S "$1" -X sessionname "$2";
+}
+
+complete -F _screen_sessions_cmd scr-run-command scr-rename

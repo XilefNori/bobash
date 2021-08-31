@@ -1,0 +1,14 @@
+whoisit() {
+	regex="(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)+([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])";
+	host="$(echo "$1" | sed -r -e 's~\w+://(www\.)?~~' -e 's~/.*$~~' | grep -oE "$regex")"
+	echo "" >&2
+
+	shift 1
+
+	if [ -n "$host" ]; then
+		cinfo "Lookup for [$host]" >&2
+		command whois "$host" "$@" >&2
+	else
+		err "No host is found" >&2
+	fi
+}

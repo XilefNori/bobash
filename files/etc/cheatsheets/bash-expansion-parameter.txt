@@ -1,0 +1,23 @@
+[[ -z ${var+x} ]] - Variable was not set (is unset)
+
+${parameter:+alterValue}      Get "alterValue" if parameter is set
+${parameter:-defaultValue}    Get default shell variables value
+${parameter:=defaultValue}    Set default shell variables value
+${parameter:?"Error"}         Display an error message if parameter is not set
+${#var}                       Find the length of the string
+${var%pattern}                Remove from shortest rear (end) pattern
+${var%%pattern}               Remove from longest rear (end) pattern
+${var:num1:num2}              Substring
+${var#pattern}                Remove from shortest front pattern
+${var##pattern}               Remove from longest front pattern
+${var/pattern/string}         Find and replace (only replace first occurrence)
+${var//pattern/string}        Find and replace all occurrences
+
+-- Sample --
+
+file='/home/user/file.txt'
+
+${file##*.} = txt             // file extension
+${file%.*}  = /home/user/file // file path without extension
+${file##*/} = file.txt        // file basename
+${file%/*}  = /home/user      // file directory

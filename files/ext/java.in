@@ -1,0 +1,70 @@
+mvn-complete() {
+	source $BOBASH_DIR/etc/bash_completion.d/maven.bash_completion.bash
+}
+
+java() {
+    declare options=("${JAVA_OPTIONS[@]}")
+
+    if [[ -f "$JAVA_LOGGER_CONFIG" ]]; then
+        declare logger_ini=$(filepath "$JAVA_LOGGER_CONFIG")
+
+        options+=(-Djava.util.logging.config.file="$logger_ini")
+        options+=(-Dlog4j.configurationFile="$logger_ini")
+        options+=(-Dlog4j.configuration=file:"$logger_ini")
+    fi
+
+    [[ $JAVA_DEBUG -gt 0 ]] && echo command java "${options[@]}" "$@"
+
+    command java "${options[@]}" "$@"
+}
+
+jar-list() {
+	declare prefix
+
+    # -- Arguments --
+    declare flags="p:" OPTIND=1
+    declare -a params
+    for (( ; OPTIND <= $#; )) do
+        if getopts "$flags" flag; then case $flag in
+              p) prefix="${OPTARG}" ;;
+        esac; else
+            params+=("${!OPTIND}"); ((OPTIND++))
+        fi
+    done
+
+    declare sed_opts=()
+    if [[ -n $prefix ]]; then
+		sed_opts+=(-e "/^$prefix/"'!d;'"s:^$prefix\.::")
+    fi
+
+    declare file="${params[0]}"
+
+	jar tf "$file" | sed -r -e 's:\r$::;/.class/!d;/\$/d;s:\.class$::;s:/:.:g' "${sed_opts[@]}"
+}
+
+complete -f -X '!*.jar' jar-list
+
+java-version() {
+	echo "JAVA_HOME='$JAVA_HOME'"
+	echo '-- JRE --'
+
+	if which java > /dev/null 2>&1; then
+		echo "Path: [$(which-m java)]"
+		echo
+
+		java -version
+	else
+		echo 'No JRE found'
+	fi
+
+	echo '-- JDK --'
+
+	if which javac > /dev/null 2>&1; then
+		echo "Path: [$(which-m javac)]"
+		echo
+
+		javac -version
+	else
+		echo 'No JDK found'
+	fi
+}

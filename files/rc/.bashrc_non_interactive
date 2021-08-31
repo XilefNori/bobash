@@ -1,0 +1,15 @@
+# ----------------------------------------------------------------------------
+# !!! For this to work you must set BASH_ENV='path_to_this_file' !!!
+# http://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html
+# http://www.linuxfromscratch.org/blfs/view/svn/postlfs/profile.html  
+# ----------------------------------------------------------------------------
+
+
+if [[ -z "$BOBASH_LOADED" ]]; then
+{
+    echo "loading ${BASH_SOURCE[0]} ..." 2>&1 
+    CHERE_INVOKING=1
+    source /etc/profile
+    source $HOME/.bash_profile
+} 2>/dev/null
+fi
